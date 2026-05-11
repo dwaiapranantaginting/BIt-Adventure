@@ -4,25 +4,23 @@
 Player::Player()
     : sprite(texture)
 {
-    bool loaded = texture.loadFromFile("assets/sprites/idlekut.png");
-    bool loadedRun = runTexture.loadFromFile("assets/sprites/walking_animation.png");
+    bool loaded = texture.loadFromFile("assets/sprites/idle_animasi.png");
     if (!loaded) {
-        std::cerr << "[ERROR] Gagal load sprite!\n";
+        std::cerr << "[ERROR] Gagal load idle sprite!\n";
         sf::Image img({32u, 32u}, sf::Color(255, 80, 80));
         texture.loadFromImage(img);
     } else {
-        std::cout << "[OK] Sprite loaded! Size: "
-                  << texture.getSize().x << "x"
-                  << texture.getSize().y << "\n";
+        std::cout << "[OK] Idle loaded!\n";
     }
 
-    sprite = sf::Sprite(texture);
-    // Potong frame pertama dari spritesheet
-    sprite.setTextureRect(sf::IntRect({0, 0}, {32, 32}));
-    sprite.setScale({1.f, 1.f});
+    bool loadedRun = runTexture.loadFromFile("assets/sprites/walking_animasi.png");
+    if (!loadedRun) std::cerr << "[ERROR] Gagal load run sprite!\n";
+    else            std::cout << "[OK] Run loaded!\n";
 
-    auto sz = texture.getSize();
-    sprite.setOrigin({sz.x / 2.f, (float)sz.y});
+    sprite = sf::Sprite(texture);
+    sprite.setTextureRect(sf::IntRect({0, 0}, {32, 32}));
+    sprite.setOrigin({16.f, 32.f}); // origin tengah-bawah
+    sprite.setScale({1.f, 1.f});
 }
 
 void Player::handleInput() {
@@ -35,12 +33,17 @@ void Player::handleInput() {
     }
 }
 
-void Player::update(float dt, sf::FloatRect groundBounds) {
+// Update dipanggil SEKALI per frame, semua collider dikirim sekaligus
+void Player::update(float dt, std::vector<sf::FloatRect>& colliders) {
     handleMovement(dt);
     if (wantsJump) handleJump();
     applyGravity(dt);
     sprite.move(velocity * dt);
-    checkGroundCollision(groundBounds);
+
+    // Reset isOnGround setiap frame
+    isOnGround = false;
+    checkCollisions(colliders);
+
     updateAnimation(dt);
 
     if (isInvincible) {
@@ -89,25 +92,39 @@ void Player::applyGravity(float dt) {
         velocity.y += gravity * dt;
 }
 
-void Player::checkGroundCollision(sf::FloatRect groundBounds) {
-    sf::FloatRect pb = sprite.getGlobalBounds();
+void Player::checkCollisions(std::vector<sf::FloatRect>& colliders) {
+    for (auto& bounds : colliders) {
+        sf::FloatRect pb = sprite.getGlobalBounds();
 
-    float playerBottom = pb.position.y + pb.size.y;
-    float groundTop    = groundBounds.position.y;
+        // Cek overlap X
+        bool overlapX = pb.position.x + pb.size.x > bounds.position.x &&
+                        pb.position.x < bounds.position.x + bounds.size.x;
 
-    bool overlapX = pb.position.x + pb.size.x > groundBounds.position.x &&
-                    pb.position.x < groundBounds.position.x + groundBounds.size.x;
+        if (!overlapX) continue;
 
-    if (playerBottom >= groundTop && velocity.y >= 0.f && overlapX) {
-        sprite.setPosition({sprite.getPosition().x, groundTop});
-        velocity.y = 0.f;
-        isOnGround = true;
-    } else {
-        isOnGround = false;
+        float playerBottom = pb.position.y + pb.size.y;
+        float groundTop    = bounds.position.y;
+
+        // Player harus datang dari atas dan velocity turun
+        // Toleransi dikecilkan jadi 8px biar tidak tertelan
+        if (velocity.y >= 0.f &&
+            playerBottom >= groundTop &&
+            playerBottom <= groundTop + 8.f)
+        {
+            sprite.setPosition({sprite.getPosition().x, groundTop});
+            velocity.y = 0.f;
+            isOnGround = true;
+        }
     }
 }
 
 void Player::updateAnimation(float dt) {
+    if (state != prevState) {
+        currentFrame = 0;
+        animTimer    = 0.f;
+        prevState    = state;
+    }
+
     animTimer += dt;
     if (animTimer >= animSpeed) {
         animTimer = 0.f;
@@ -119,13 +136,16 @@ void Player::updateAnimation(float dt) {
                 sprite.setTexture(texture);
                 sprite.setTextureRect(sf::IntRect({currentFrame * 32, 0}, {32, 32}));
                 break;
-
             case PlayerState::RUN:
                 if (currentFrame > 3) currentFrame = 0;
                 sprite.setTexture(runTexture);
                 sprite.setTextureRect(sf::IntRect({currentFrame * 32, 0}, {32, 32}));
                 break;
-
+            case PlayerState::JUMP:
+                currentFrame = 0;
+                sprite.setTexture(texture);
+                sprite.setTextureRect(sf::IntRect({0, 0}, {32, 32}));
+                break;
             default:
                 currentFrame = 0;
                 break;
@@ -136,10 +156,10 @@ void Player::updateAnimation(float dt) {
 void Player::flipSprite() {
     if (facingRight) {
         sprite.setScale({1.f, 1.f});
-        sprite.setOrigin({16.f, 32.f}); // origin tengah-bawah normal
+        sprite.setOrigin({16.f, 32.f});
     } else {
         sprite.setScale({-1.f, 1.f});
-        sprite.setOrigin({16.f, 32.f}); // origin tetap sama
+        sprite.setOrigin({16.f, 32.f});
     }
 }
 
