@@ -13,10 +13,13 @@ private:
     void handleInput();
     void update(float dt);
     void render();
+    
+    // Fungsi pembantu untuk membuat balok tanah
+    void createGroundSegment(float x, float width);
 
     sf::RenderWindow  window;
     sf::RenderTexture renderTexture;
-    sf::Sprite*       renderSprite = nullptr;
+    sf::Sprite* renderSprite = nullptr;
     sf::View          camera;
 
     sf::RectangleShape background;

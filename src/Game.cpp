@@ -27,19 +27,40 @@ Game::Game()
     background.setFillColor(sf::Color(135, 206, 235));
     background.setPosition({0.f, 0.f});
 
-    // Ground pakai Platform sprite, panjang menutupi seluruh dunia
-    // y = INTERNAL_H - 16 agar platform tepat di bawah layar
-    // Ground 3 baris ke bawah
-    // Di dalam Game::Game()
-    // Baris atas menggunakan tipe TOP
-    platforms.emplace_back(0.f, (float)INTERNAL_H - 48.f, 10000.f, PlatformType::TOP);
+    // --- MEMBUAT LEVEL BERLUBANG ---
+    float currentX = 0.f;
+    float groundTopY = (float)INTERNAL_H - 48.f;
 
-    // Baris bawah (dan seterusnya) menggunakan tipe BOTTOM
-    platforms.emplace_back(0.f, (float)INTERNAL_H - 32.f, 10000.f, PlatformType::BOTTOM);
-    platforms.emplace_back(0.f, (float)INTERNAL_H - 16.f, 10000.f, PlatformType::BOTTOM);
+    for (float y = 0.f; y < groundTopY; y += 16.f) {
+        // Angka 16.f di sini mengatur agar lebarnya pas 1 tile (1 kolom)
+        platforms.emplace_back(0.f, y, 16.f, PlatformType::BOTTOM);
+    }
 
-    // Spawn player di atas ground
-    player.setPosition(40.f, (float)INTERNAL_H - 48.f);
+    // Segmen Tanah 1
+    createGroundSegment(currentX, 300.f); 
+    
+    // Memberikan jeda / lubang selebar 48px
+    currentX += 300.f + 48.f; 
+
+    // Segmen Tanah 2
+    createGroundSegment(currentX, 320.f);
+    
+    // Memberikan lubang yang lebih lebar (64px)
+    currentX += 320.f + 64.f;
+
+    // Segmen Tanah 3
+    createGroundSegment(currentX, 1000.f);
+
+    // Spawn player di atas tanah pertama
+    player.setPosition(40.f, (float)INTERNAL_H - 64.f);
+}
+
+void Game::createGroundSegment(float x, float width) {
+    // Baris atas
+    platforms.emplace_back(x, (float)INTERNAL_H - 48.f, width, PlatformType::TOP);
+    // Dua baris bawah untuk kedalaman
+    platforms.emplace_back(x, (float)INTERNAL_H - 32.f, width, PlatformType::BOTTOM);
+    platforms.emplace_back(x, (float)INTERNAL_H - 16.f, width, PlatformType::BOTTOM);
 }
 
 void Game::run() {
@@ -66,15 +87,18 @@ void Game::handleInput() {
 }
 
 void Game::update(float dt) {
-    // Kumpulkan semua collider
     std::vector<sf::FloatRect> colliders;
     for (auto& p : platforms)
         colliders.push_back(p.getBounds());
 
-    // Update player SEKALI dengan semua collider
     player.update(dt, colliders);
 
-    // Kamera ikuti player
+    // --- LOGIKA JATUH KE LUBANG ---
+    if (player.getPosition().y > INTERNAL_H + 50.f) {
+        std::cout << "[INFO] Player jatuh ke lubang! Reset...\n";
+        player.setPosition(40.f, (float)INTERNAL_H - 64.f); // Kembalikan ke titik awal
+    }
+
     float camX = player.getPosition().x;
     if (camX < (float)INTERNAL_W / 2.f)
         camX = (float)INTERNAL_W / 2.f;

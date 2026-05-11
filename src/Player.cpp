@@ -1,25 +1,23 @@
 #include "Player.h"
 #include <iostream>
+#include <algorithm>
 
 Player::Player()
     : sprite(texture)
 {
-    bool loaded = texture.loadFromFile("assets/sprites/idle_animasi.png");
+    bool loaded = texture.loadFromFile("assets/sprites/idlekut.png");
     if (!loaded) {
         std::cerr << "[ERROR] Gagal load idle sprite!\n";
         sf::Image img({32u, 32u}, sf::Color(255, 80, 80));
         texture.loadFromImage(img);
-    } else {
-        std::cout << "[OK] Idle loaded!\n";
     }
 
-    bool loadedRun = runTexture.loadFromFile("assets/sprites/walking_animasi.png");
+    bool loadedRun = runTexture.loadFromFile("assets/sprites/walking_animation.png");
     if (!loadedRun) std::cerr << "[ERROR] Gagal load run sprite!\n";
-    else            std::cout << "[OK] Run loaded!\n";
 
     sprite = sf::Sprite(texture);
     sprite.setTextureRect(sf::IntRect({0, 0}, {32, 32}));
-    sprite.setOrigin({16.f, 32.f}); // origin tengah-bawah
+    sprite.setOrigin({16.f, 32.f}); 
     sprite.setScale({1.f, 1.f});
 }
 
@@ -33,14 +31,12 @@ void Player::handleInput() {
     }
 }
 
-// Update dipanggil SEKALI per frame, semua collider dikirim sekaligus
 void Player::update(float dt, std::vector<sf::FloatRect>& colliders) {
     handleMovement(dt);
     if (wantsJump) handleJump();
     applyGravity(dt);
     sprite.move(velocity * dt);
 
-    // Reset isOnGround setiap frame
     isOnGround = false;
     checkCollisions(colliders);
 
@@ -88,32 +84,71 @@ void Player::handleJump() {
 }
 
 void Player::applyGravity(float dt) {
-    if (!isOnGround)
-        velocity.y += gravity * dt;
+    // Gravitasi selalu menarik ke bawah setiap frame
+    // Ini memaksa karakter selalu "menekan" lantai dan terdeteksi oleh Collision!
+    velocity.y += gravity * dt;
 }
 
 void Player::checkCollisions(std::vector<sf::FloatRect>& colliders) {
     for (auto& bounds : colliders) {
         sf::FloatRect pb = sprite.getGlobalBounds();
 
-        // Cek overlap X
-        bool overlapX = pb.position.x + pb.size.x > bounds.position.x &&
-                        pb.position.x < bounds.position.x + bounds.size.x;
+        // 1. Perbaikan Hitbox Kiri-Kanan (Biar gak terbang di ujung jurang)
+        float shrinkX = 10.f; 
+        pb.position.x += shrinkX;
+        pb.size.x -= shrinkX * 2.f;
 
-        if (!overlapX) continue;
+        // 2. Perbaikan Hitbox Atas-Bawah
+        float shrinkY = 4.f;  
+        pb.size.y -= shrinkY;
 
-        float playerBottom = pb.position.y + pb.size.y;
-        float groundTop    = bounds.position.y;
+        float pLeft   = pb.position.x;
+        float pRight  = pb.position.x + pb.size.x;
+        float pTop    = pb.position.y;
+        float pBottom = pb.position.y + pb.size.y;
 
-        // Player harus datang dari atas dan velocity turun
-        // Toleransi dikecilkan jadi 8px biar tidak tertelan
-        if (velocity.y >= 0.f &&
-            playerBottom >= groundTop &&
-            playerBottom <= groundTop + 8.f)
-        {
-            sprite.setPosition({sprite.getPosition().x, groundTop});
-            velocity.y = 0.f;
-            isOnGround = true;
+        float bLeft   = bounds.position.x;
+        float bRight  = bounds.position.x + bounds.size.x;
+        float bTop    = bounds.position.y;
+        float bBottom = bounds.position.y + bounds.size.y;
+
+        if (pRight <= bLeft || pLeft >= bRight || pBottom <= bTop || pTop >= bBottom) {
+            continue; 
+        }
+
+        float overlapLeft   = pRight - bLeft;    
+        float overlapRight  = bRight - pLeft;    
+        float overlapTop    = pBottom - bTop;    
+        float overlapBottom = bBottom - pTop;    
+
+        float minOverlap = std::min({overlapLeft, overlapRight, overlapTop, overlapBottom});
+
+        // --- TILE SEAM FIX (Ini yang benerin animasi RUN!) ---
+        // Kalau kaki masuk ke lantai (kurang dari 12px) dan tidak sedang lompat ke atas,
+        // PAKSA game anggap ini injak lantai, abaikan celah tembok antar balok tanah!
+        if (overlapTop < 12.f && velocity.y >= 0.f) {
+            minOverlap = overlapTop;
+        }
+
+        // --- RESOLUSI TABRAKAN ---
+        if (minOverlap == overlapTop) {
+            // Tabrakan Atas (Mendarat) -> isOnGround jadi true lagi!
+            sprite.setPosition({sprite.getPosition().x, bTop + shrinkY});
+            if (velocity.y > 0.f) velocity.y = 0.f; 
+            isOnGround = true; 
+        } 
+        else if (minOverlap == overlapBottom) {
+            // Tabrakan Bawah (Nyundul plafon)
+            sprite.setPosition({sprite.getPosition().x, sprite.getPosition().y + overlapBottom});
+            if (velocity.y < 0.f) velocity.y = 0.f; 
+        } 
+        else if (minOverlap == overlapLeft) {
+            // Mentok dinding dari arah kanan
+            sprite.setPosition({sprite.getPosition().x - overlapLeft, sprite.getPosition().y});
+        } 
+        else if (minOverlap == overlapRight) {
+            // Mentok dinding dari arah kiri
+            sprite.setPosition({sprite.getPosition().x + overlapRight, sprite.getPosition().y});
         }
     }
 }
