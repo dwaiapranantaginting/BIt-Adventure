@@ -30,7 +30,7 @@ private:
 
     sf::Vector2f velocity;
     float gravity   = 500.f;
-    float moveSpeed = 50.f;
+    float moveSpeed = 70.f;
     float jumpForce = -200.f;
 
     PlayerState state     = PlayerState::IDLE;

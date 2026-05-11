@@ -30,10 +30,13 @@ Game::Game()
     // Ground pakai Platform sprite, panjang menutupi seluruh dunia
     // y = INTERNAL_H - 16 agar platform tepat di bawah layar
     // Ground 3 baris ke bawah
-    platforms.emplace_back(0.f, (float)INTERNAL_H - 48.f, 10000.f); // baris atas
-    platforms.emplace_back(0.f, (float)INTERNAL_H - 32.f, 10000.f); // baris tengah
-    platforms.emplace_back(0.f, (float)INTERNAL_H - 16.f, 10000.f); // baris bawah
+    // Di dalam Game::Game()
+    // Baris atas menggunakan tipe TOP
+    platforms.emplace_back(0.f, (float)INTERNAL_H - 48.f, 10000.f, PlatformType::TOP);
 
+    // Baris bawah (dan seterusnya) menggunakan tipe BOTTOM
+    platforms.emplace_back(0.f, (float)INTERNAL_H - 32.f, 10000.f, PlatformType::BOTTOM);
+    platforms.emplace_back(0.f, (float)INTERNAL_H - 16.f, 10000.f, PlatformType::BOTTOM);
 
     // Spawn player di atas ground
     player.setPosition(40.f, (float)INTERNAL_H - 48.f);

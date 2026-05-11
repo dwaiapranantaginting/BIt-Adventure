@@ -1,56 +1,69 @@
 #include "Platform.h"
 #include <iostream>
+#include <cstdlib> // Untuk rand()
 
-// Definisi static variable — di-load sekali untuk semua platform
-sf::Texture Platform::sharedTexture;
-bool        Platform::textureLoaded = false;
+// Inisialisasi variabel static
+sf::Texture Platform::topTexture;
+sf::Texture Platform::bottomTexture;
+bool        Platform::texturesLoaded = false;
 
-bool Platform::loadTexture() {
-    if (textureLoaded) return true;
-    if (!sharedTexture.loadFromFile("assets/sprites/Platform_atas.png")) {
-        std::cerr << "[ERROR] Gagal load Platform_tile.png!\n";
+bool Platform::loadTextures() {
+    if (texturesLoaded) return true;
+
+    if (!topTexture.loadFromFile("assets/sprites/Platform_atas.png")) {
+        std::cerr << "[ERROR] Gagal load platform_atas.png!\n";
         return false;
     }
-    textureLoaded = true;
-    std::cout << "[OK] Platform texture loaded!\n";
+
+    if (!bottomTexture.loadFromFile("assets/sprites/Platform_bawah.png")) {
+        std::cerr << "[ERROR] Gagal load platform_bawah.png!\n";
+        return false;
+    }
+
+    texturesLoaded = true;
+    std::cout << "[OK] Platform textures (Atas & Bawah) loaded!\n";
     return true;
 }
 
-Platform::Platform(float x, float y, float width)
-    : posX(x), posY(y), platWidth(width)
+Platform::Platform(float x, float y, float width, PlatformType type)
+    : posX(x), posY(y), platWidth(width), type(type)
 {
-    loadTexture(); // hanya load jika belum
+    loadTextures();
 
+    // Fallback jika texture gagal
     shape.setSize({width, 16.f});
     shape.setPosition({x, y});
-    shape.setFillColor(sf::Color(139, 90, 43));   // fallback coklat
-    shape.setOutlineColor(sf::Color(80, 50, 20));
-    shape.setOutlineThickness(1.f);
+    shape.setFillColor(sf::Color(139, 90, 43));
+
+    if (texturesLoaded) {
+        // Pilih tekstur yang sesuai tipe
+        sf::Texture& currentTex = (type == PlatformType::TOP) ? topTexture : bottomTexture;
+        sf::Sprite tile(currentTex);
+
+        // Susun platform dari kiri ke kanan setiap 16 pixel
+        for (float mx = posX; mx < posX + platWidth; mx += 16.f) {
+            tile.setPosition({mx, posY});
+
+            // ACAK: Pilih salah satu dari 3 variasi (X=0, X=16, atau X=32)
+            // Ini membagi gambar 48x16 kamu menjadi 3 bagian
+            int randomX = (rand() % 3) * 16; 
+
+            tile.setTextureRect(sf::IntRect({randomX, 0}, {16, 16}));
+            
+            // Simpan ke vector agar tidak berubah-ubah saat draw
+            tileSprites.push_back(tile);
+        }
+    }
 }
 
 void Platform::draw(sf::RenderTarget& target) {
-    if (textureLoaded) {
-        sf::Sprite tile(sharedTexture);
-
-        // Gambar kiri (x=0 di texture)
-        tile.setTextureRect(sf::IntRect({0, 0}, {16, 16}));
-        tile.setPosition({posX, posY});
-        target.draw(tile);
-
-        // Gambar tengah (x=16 di texture) — repeat
-        tile.setTextureRect(sf::IntRect({16, 0}, {16, 16}));
-        float midEnd = posX + platWidth - 16.f;
-        for (float mx = posX + 16.f; mx < midEnd; mx += 16.f) {
-            tile.setPosition({mx, posY});
-            target.draw(tile);
+    if (texturesLoaded) {
+        // Gambar semua sprite yang sudah disusun di constructor
+        for (auto& t : tileSprites) {
+            target.draw(t);
         }
-
-        // Gambar kanan (x=32 di texture)
-        tile.setTextureRect(sf::IntRect({32, 0}, {16, 16}));
-        tile.setPosition({posX + platWidth - 16.f, posY});
-        target.draw(tile);
     } else {
-        target.draw(shape); // fallback
+        target.draw(shape);
     }
 }
 
