@@ -13,8 +13,6 @@ private:
     void handleInput();
     void update(float dt);
     void render();
-    
-    // Fungsi pembantu untuk membuat balok tanah
     void createGroundSegment(float x, float width);
 
     sf::RenderWindow  window;
@@ -27,4 +25,14 @@ private:
     std::vector<Platform> platforms;
 
     sf::Clock clock;
+
+    // ui hati playeer
+    sf::Texture  heartFullTex;
+    sf::Texture  heartEmptyTex;
+    sf::Sprite*  heartSprites[3] = {nullptr, nullptr, nullptr};
+    sf::View     uiView;
+    bool         uiLoaded = false;
+
+    void loadUI();
+    void renderUI();
 };

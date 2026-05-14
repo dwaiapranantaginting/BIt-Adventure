@@ -53,6 +53,11 @@ Game::Game()
 
     // Spawn player di atas tanah pertama
     player.setPosition(40.f, (float)INTERNAL_H - 64.f);
+
+    uiView = sf::View(sf::FloatRect({0.f, 0.f},
+        {(float)INTERNAL_W, (float)INTERNAL_H}));
+
+    loadUI();
 }
 
 void Game::createGroundSegment(float x, float width) {
@@ -61,6 +66,50 @@ void Game::createGroundSegment(float x, float width) {
     // Dua baris bawah untuk kedalaman
     platforms.emplace_back(x, (float)INTERNAL_H - 32.f, width, PlatformType::BOTTOM);
     platforms.emplace_back(x, (float)INTERNAL_H - 16.f, width, PlatformType::BOTTOM);
+}
+
+void Game::loadUI() {
+    if (!heartFullTex.loadFromFile("assets/ui/heart_ready.png")) {
+        std::cerr << "[ERROR] Gagal load heart_full.png!\n";
+        return;
+    }
+    if (!heartEmptyTex.loadFromFile("assets/ui/heart_kosong.png")) {
+        std::cerr << "[ERROR] Gagal load heart_empty.png!\n";
+        return;
+    }
+
+    // Buat 3 sprite heart, posisi dari kiri atas
+    // Jarak antar heart: 10px (8px lebar + 2px gap)
+    for (int i = 0; i < 3; i++) {
+        heartSprites[i] = new sf::Sprite(heartFullTex);
+        // Scale 1x karena sudah di render texture 320x180
+        heartSprites[i]->setScale({1.f, 1.f});
+        heartSprites[i]->setPosition({4.f + i * 10.f, 4.f});
+    }
+    uiLoaded = true;
+    std::cout << "[OK] UI hearts loaded!\n";
+}
+
+void Game::renderUI() {
+    if (!uiLoaded) return;
+
+    int hp = player.getHealth();
+
+    // Switch texture tiap heart sesuai health
+    for (int i = 0; i < 3; i++) {
+        if (i < hp)
+            heartSprites[i]->setTexture(heartFullTex);
+        else
+            heartSprites[i]->setTexture(heartEmptyTex);
+    }
+
+    // Pakai uiView agar tidak ikut kamera
+    renderTexture.setView(uiView);
+    for (int i = 0; i < 3; i++)
+        renderTexture.draw(*heartSprites[i]);
+
+    // Kembalikan view ke kamera game
+    renderTexture.setView(camera);
 }
 
 void Game::run() {
@@ -115,6 +164,9 @@ void Game::render() {
         p.draw(renderTexture);
 
     renderTexture.draw(player.getSprite());
+
+    renderUI();
+    
     renderTexture.display();
 
     renderSprite->setTexture(renderTexture.getTexture());

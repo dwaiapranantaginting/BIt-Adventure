@@ -9,12 +9,12 @@ bool        Platform::texturesLoaded = false;
 bool Platform::loadTextures() {
     if (texturesLoaded) return true;
 
-    if (!topTexture.loadFromFile("assets/sprites/platform_atas.png")) {
+    if (!topTexture.loadFromFile("assets/map/platform_atas.png")) {
         std::cerr << "[ERROR] Gagal load platform_atas.png!\n";
         return false;
     }
 
-    if (!bottomTexture.loadFromFile("assets/sprites/platform_bawah.png")) {
+    if (!bottomTexture.loadFromFile("assets/map/platform_bawah.png")) {
         std::cerr << "[ERROR] Gagal load platform_bawah.png!\n";
         return false;
     }
