@@ -1,5 +1,6 @@
 #include "Game.h"
 #include <iostream>
+#include <cmath>
 
 static const unsigned int INTERNAL_W = 320;
 static const unsigned int INTERNAL_H = 180;
@@ -156,12 +157,21 @@ void Game::update(float dt) {
     if (boss) {
         boss->update(dt, player.getPosition(), colliders);
 
-    // Cek tabrakan boss vs player (melee damage)
-    if (boss->getBounds().findIntersection(
-            player.getSprite().getGlobalBounds())) {
-        player.takeDamage();
+        // Damage hanya saat frame terakhir attack
+        if (boss->shouldDamagePlayer()) {
+            sf::FloatRect bossBounds = boss->getBounds();
+            float bossCenterX = bossBounds.position.x + bossBounds.size.x / 2.f;
+            float bossCenterY = bossBounds.position.y + bossBounds.size.y / 2.f;
+            sf::Vector2f playerPos = player.getPosition();
+            float dx = playerPos.x - bossCenterX;
+            float dy = playerPos.y - bossCenterY;
+            float dist = std::sqrt(dx*dx + dy*dy);
+
+            if (dist <= 48.f) { // sedikit lebih besar dari attackRange
+                player.takeDamage();
+            }
+        }
     }
-}
 
     float camX = player.getPosition().x;
     if (camX < (float)INTERNAL_W / 2.f)

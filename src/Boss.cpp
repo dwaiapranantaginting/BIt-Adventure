@@ -12,6 +12,9 @@ Boss::Boss(float x, float y)
     if (!runTexture.loadFromFile("assets/sprites/rika_run.png"))
         std::cerr << "[ERROR] Gagal load boss_run.png!\n";
 
+    if (!attackTexture.loadFromFile("assets/sprites/attacking_rika.png"))
+        std::cerr << "[ERROR] Gagal load attacking_rika.png!\n";
+
     sprite = sf::Sprite(idleTexture);
     sprite.setTextureRect(sf::IntRect({0, 0}, {64, 64}));
     sprite.setOrigin({32.f, 64.f});  // tengah-bawah
@@ -32,20 +35,43 @@ void Boss::chasePlayer(float dt, sf::Vector2f playerPos) {
     float dy = playerPos.y - bossPos.y;
     float dist = std::sqrt(dx * dx + dy * dy);
 
-    if (dist > 4.f) {
-        // Kejar player ke segala arah (X dan Y)
-        velocity.x = (dx / dist) * moveSpeed;
-        velocity.y = (dy / dist) * moveSpeed;
-        state = BossState::RUN;
-    } else {
-        // Sudah sangat dekat → IDLE
-        velocity.x = 0.f;
-        velocity.y = 0.f;
-        state = BossState::IDLE;
-    }
-
     facingRight = (dx > 0.f);
     flipSprite();
+
+    // Kalau lagi attacking, jangan gerak
+    if (isAttacking) {
+        velocity.x = 0.f;
+        velocity.y = 0.f;
+        return;
+    }
+
+    // Cooldown setelah attack selesai
+    if (attackCooldown > 0.f) {
+        attackCooldown -= dt;
+        velocity.x = 0.f;
+        velocity.y = 0.f;
+        state      = BossState::IDLE;
+        return;
+    }
+
+    if (dist <= attackRange) {
+        velocity.x     = 0.f;
+        velocity.y     = 0.f;
+        state          = BossState::ATTACK;
+        isAttacking    = true;
+        attackFrame    = 0;
+        currentFrame   = 0;
+        animTimer      = 0.f;
+        hasDealtDamage = false;
+    } else if (dist > 4.f) {
+        velocity.x = (dx / dist) * moveSpeed;
+        velocity.y = (dy / dist) * moveSpeed;
+        state      = BossState::RUN;
+    } else {
+        velocity.x = 0.f;
+        velocity.y = 0.f;
+        state      = BossState::IDLE;
+    }
 }
 
 void Boss::applyGravity(float dt) {
@@ -131,11 +157,28 @@ void Boss::updateAnimation(float dt) {
                 sprite.setTextureRect(
                     sf::IntRect({currentFrame * 64, 0}, {64, 64}));
                 break;
+
             case BossState::RUN:
                 if (currentFrame >= 6) currentFrame = 0;
                 sprite.setTexture(runTexture);
                 sprite.setTextureRect(
                     sf::IntRect({currentFrame * 64, 0}, {64, 64}));
+                break;
+
+            case BossState::ATTACK:
+                sprite.setTexture(attackTexture);
+                if (currentFrame >= 3) {
+                    // Animasi attack selesai
+                    currentFrame   = 0;
+                    isAttacking    = false;
+                    hasDealtDamage = false;
+                    attackCooldown = attackCooldownMax; // mulai delay
+                    state          = BossState::IDLE;
+                    prevState      = BossState::IDLE;
+                } else {
+                    sprite.setTextureRect(
+                        sf::IntRect({currentFrame * 64, 0}, {64, 64}));
+                }
                 break;
         }
     }
@@ -155,6 +198,16 @@ sf::FloatRect Boss::getBounds() {
     return sprite.getGlobalBounds();
 }
 
+bool Boss::shouldDamagePlayer() {
+    // Damage di frame ke-2 (frame terakhir sebelum selesai)
+    if (isAttacking && currentFrame == 2 && !hasDealtDamage) {
+        hasDealtDamage = true;
+        return true;
+    }
+    return false;
+}
+
 void Boss::draw(sf::RenderTarget& target) {
     target.draw(sprite);
 }
+

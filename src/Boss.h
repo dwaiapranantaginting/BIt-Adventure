@@ -1,7 +1,7 @@
 #pragma once
 #include <SFML/Graphics.hpp>
 
-enum class BossState { IDLE, RUN };
+enum class BossState { IDLE, RUN, ATTACK };
 
 class Boss {
 public:
@@ -10,6 +10,7 @@ public:
     void update(float dt, sf::Vector2f playerPos,
                 std::vector<sf::FloatRect>& colliders);
     void draw(sf::RenderTarget& target);
+    bool shouldDamagePlayer();
     sf::FloatRect getBounds();
 
 private:
@@ -38,4 +39,17 @@ private:
 
     // Jarak minimum sebelum boss mulai kejar player
     float chaseRange = 200.f;
+
+    sf::Texture  attackTexture;  // tambah ini
+
+    bool  isAttacking    = false;
+    float attackTimer    = 0.f;
+    float attackDuration = 0.f;
+    int   attackFrame    = 0;
+    bool  hasDealtDamage = false; // pastikan damage hanya sekali per serangan
+
+    float attackRange = 32.f;
+
+    float attackCooldown    = 0.f;
+    float attackCooldownMax = 0.8f; 
 };
