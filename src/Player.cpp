@@ -15,6 +15,9 @@ Player::Player()
     bool loadedRun = runTexture.loadFromFile("assets/sprites/walking_animation.png");
     if (!loadedRun) std::cerr << "[ERROR] Gagal load run sprite!\n";
 
+    bool loadedJump = jumpTexture.loadFromFile("assets/sprites/jumping_animation.png");
+    if (!loadedJump) std::cerr << "[ERROR] Gagal load jump sprite!\n";
+
     sprite = sf::Sprite(texture);
     sprite.setTextureRect(sf::IntRect({0, 0}, {32, 32}));
     sprite.setOrigin({16.f, 32.f}); 
@@ -37,8 +40,24 @@ void Player::update(float dt, std::vector<sf::FloatRect>& colliders) {
     applyGravity(dt);
     sprite.move(velocity * dt);
 
+    bool wasOnGround = isOnGround; // simpan state sebelumnya
     isOnGround = false;
     checkCollisions(colliders);
+
+    // Baru mendarat = sebelumnya di udara, sekarang di tanah
+    if (!wasOnGround && isOnGround && !isLanding) {
+        isLanding    = true;
+        landingTimer = landingTime;
+    }
+
+    // Landing timer
+    if (isOnGround && isLanding) {
+        landingTimer -= dt;
+        if (landingTimer <= 0.f) {
+            isLanding    = false;
+            landingTimer = 0.f;
+        }
+    }
 
     updateAnimation(dt);
 
@@ -66,9 +85,16 @@ void Player::handleMovement(float dt) {
     velocity.x = moveX;
 
     if (isOnGround) {
-        if (duck)              state = PlayerState::DUCK;
-        else if (moveX != 0.f) state = PlayerState::RUN;
-        else                   state = PlayerState::IDLE;
+        if (isLanding) {
+            // Tahan di state landing dulu
+            state = PlayerState::JUMP;
+        } else if (duck) {
+            state = PlayerState::DUCK;
+        } else if (moveX != 0.f) {
+            state = PlayerState::RUN;
+        } else {
+            state = PlayerState::IDLE;
+        }
     } else {
         state = PlayerState::JUMP;
     }
@@ -77,10 +103,11 @@ void Player::handleMovement(float dt) {
 }
 
 void Player::handleJump() {
-    velocity.y = jumpForce;
-    isOnGround = false;
-    state      = PlayerState::JUMP;
-    wantsJump  = false;
+    velocity.y   = jumpForce;
+    isOnGround   = false;
+    isLanding    = false;
+    state        = PlayerState::JUMP;
+    wantsJump    = false;
 }
 
 void Player::applyGravity(float dt) {
@@ -93,13 +120,11 @@ void Player::checkCollisions(std::vector<sf::FloatRect>& colliders) {
     for (auto& bounds : colliders) {
         sf::FloatRect pb = sprite.getGlobalBounds();
 
-        // 1. Perbaikan Hitbox Kiri-Kanan (Biar gak terbang di ujung jurang)
-        float shrinkX = 10.f; 
+        float shrinkX = 10.f;
         pb.position.x += shrinkX;
         pb.size.x -= shrinkX * 2.f;
 
-        // 2. Perbaikan Hitbox Atas-Bawah
-        float shrinkY = 4.f;  
+        float shrinkY = 4.f;
         pb.size.y -= shrinkY;
 
         float pLeft   = pb.position.x;
@@ -112,48 +137,51 @@ void Player::checkCollisions(std::vector<sf::FloatRect>& colliders) {
         float bTop    = bounds.position.y;
         float bBottom = bounds.position.y + bounds.size.y;
 
-        if (pRight <= bLeft || pLeft >= bRight || pBottom <= bTop || pTop >= bBottom) {
-            continue; 
-        }
+        if (pRight <= bLeft || pLeft >= bRight ||
+            pBottom <= bTop || pTop >= bBottom) continue;
 
-        float overlapLeft   = pRight - bLeft;    
-        float overlapRight  = bRight - pLeft;    
-        float overlapTop    = pBottom - bTop;    
-        float overlapBottom = bBottom - pTop;    
+        float overlapLeft   = pRight - bLeft;
+        float overlapRight  = bRight - pLeft;
+        float overlapTop    = pBottom - bTop;
+        float overlapBottom = bBottom - pTop;
 
-        float minOverlap = std::min({overlapLeft, overlapRight, overlapTop, overlapBottom});
+        float minOverlap = std::min({overlapLeft, overlapRight,
+                                     overlapTop, overlapBottom});
 
-        // --- TILE SEAM FIX (Ini yang benerin animasi RUN!) ---
-        // Kalau kaki masuk ke lantai (kurang dari 12px) dan tidak sedang lompat ke atas,
-        // PAKSA game anggap ini injak lantai, abaikan celah tembok antar balok tanah!
-        if (overlapTop < 12.f && velocity.y >= 0.f) {
+        if (overlapTop < 12.f && velocity.y >= 0.f)
             minOverlap = overlapTop;
-        }
 
-        // --- RESOLUSI TABRAKAN ---
         if (minOverlap == overlapTop) {
-            // Tabrakan Atas (Mendarat) -> isOnGround jadi true lagi!
-            sprite.setPosition({sprite.getPosition().x, bTop + shrinkY});
-            if (velocity.y > 0.f) velocity.y = 0.f; 
-            isOnGround = true; 
-        } 
+            sprite.setPosition(sf::Vector2f(
+                sprite.getPosition().x, bTop + shrinkY));
+            if (velocity.y > 0.f) velocity.y = 0.f;
+            isOnGround = true;
+            // TIDAK ada isLanding di sini — sudah dipindah ke update()
+        }
         else if (minOverlap == overlapBottom) {
-            // Tabrakan Bawah (Nyundul plafon)
-            sprite.setPosition({sprite.getPosition().x, sprite.getPosition().y + overlapBottom});
-            if (velocity.y < 0.f) velocity.y = 0.f; 
-        } 
+            sprite.setPosition({sprite.getPosition().x,
+                                sprite.getPosition().y + overlapBottom});
+            if (velocity.y < 0.f) velocity.y = 0.f;
+        }
         else if (minOverlap == overlapLeft) {
-            // Mentok dinding dari arah kanan
-            sprite.setPosition({sprite.getPosition().x - overlapLeft, sprite.getPosition().y});
-        } 
+            sprite.setPosition({sprite.getPosition().x - overlapLeft,
+                                sprite.getPosition().y});
+        }
         else if (minOverlap == overlapRight) {
-            // Mentok dinding dari arah kiri
-            sprite.setPosition({sprite.getPosition().x + overlapRight, sprite.getPosition().y});
+            sprite.setPosition({sprite.getPosition().x + overlapRight,
+                                sprite.getPosition().y});
         }
     }
 }
 
 void Player::updateAnimation(float dt) {
+    // Kalau lagi landing, tahan frame 3 — jangan update apapun
+    if (isLanding) {
+        sprite.setTexture(jumpTexture);
+        sprite.setTextureRect(sf::IntRect({3 * 32, 0}, {32, 32}));
+        return;
+    }
+
     if (state != prevState) {
         currentFrame = 0;
         animTimer    = 0.f;
@@ -171,16 +199,25 @@ void Player::updateAnimation(float dt) {
                 sprite.setTexture(texture);
                 sprite.setTextureRect(sf::IntRect({currentFrame * 32, 0}, {32, 32}));
                 break;
+
             case PlayerState::RUN:
                 if (currentFrame > 3) currentFrame = 0;
                 sprite.setTexture(runTexture);
                 sprite.setTextureRect(sf::IntRect({currentFrame * 32, 0}, {32, 32}));
                 break;
+
             case PlayerState::JUMP:
-                currentFrame = 0;
-                sprite.setTexture(texture);
-                sprite.setTextureRect(sf::IntRect({0, 0}, {32, 32}));
+                sprite.setTexture(jumpTexture);
+                if (!isOnGround && velocity.y < -80.f) {
+                    currentFrame = 1; // baru lepas lantai
+                } else if (!isOnGround) {
+                    currentFrame = 2; // di udara
+                } else {
+                    currentFrame = 0; // bersiap (frame awal)
+                }
+                sprite.setTextureRect(sf::IntRect({currentFrame * 32, 0}, {32, 32}));
                 break;
+
             default:
                 currentFrame = 0;
                 break;

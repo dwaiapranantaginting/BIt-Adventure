@@ -26,6 +26,7 @@ private:
 
     sf::Texture  texture;
     sf::Texture  runTexture;
+    sf::Texture  jumpTexture;
     sf::Sprite   sprite;
 
     sf::Vector2f velocity;
@@ -49,4 +50,9 @@ private:
     float invincTimer  = 0.f;
     float invincTime   = 1.5f;
     bool  isInvincible = false;
+
+    float landingTimer = 0.f;
+    float landingTime  = 0.12f; // berapa lama frame landing ditampilkan
+    bool  isLanding    = false;
+    bool  wasInAir = false;
 };

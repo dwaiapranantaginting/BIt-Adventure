@@ -3,6 +3,7 @@
 #include "Player.h"
 #include "Platform.h"
 #include <vector>
+#include "Boss.h"
 
 class Game {
 public:
@@ -35,4 +36,6 @@ private:
 
     void loadUI();
     void renderUI();
+
+    Boss* boss = nullptr;
 };

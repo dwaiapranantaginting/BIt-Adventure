@@ -52,7 +52,10 @@ Game::Game()
     createGroundSegment(currentX, 1000.f);
 
     // Spawn player di atas tanah pertama
-    player.setPosition(40.f, (float)INTERNAL_H - 64.f);
+    player.setPosition(40.f, (float)INTERNAL_H - 44.f); 
+
+    // Spawn boss di segmen tanah 3, bisa diubah koordinatnya
+    boss = new Boss(100.f, (float)INTERNAL_H - 80.f);
 
     uiView = sf::View(sf::FloatRect({0.f, 0.f},
         {(float)INTERNAL_W, (float)INTERNAL_H}));
@@ -66,6 +69,8 @@ void Game::createGroundSegment(float x, float width) {
     // Dua baris bawah untuk kedalaman
     platforms.emplace_back(x, (float)INTERNAL_H - 32.f, width, PlatformType::BOTTOM);
     platforms.emplace_back(x, (float)INTERNAL_H - 16.f, width, PlatformType::BOTTOM);
+
+
 }
 
 void Game::loadUI() {
@@ -147,6 +152,16 @@ void Game::update(float dt) {
         std::cout << "[INFO] Player jatuh ke lubang! Reset...\n";
         player.setPosition(40.f, (float)INTERNAL_H - 64.f); // Kembalikan ke titik awal
     }
+    // Update boss
+    if (boss) {
+        boss->update(dt, player.getPosition(), colliders);
+
+    // Cek tabrakan boss vs player (melee damage)
+    if (boss->getBounds().findIntersection(
+            player.getSprite().getGlobalBounds())) {
+        player.takeDamage();
+    }
+}
 
     float camX = player.getPosition().x;
     if (camX < (float)INTERNAL_W / 2.f)
@@ -165,6 +180,7 @@ void Game::render() {
 
     renderTexture.draw(player.getSprite());
 
+    if (boss) boss->draw(renderTexture);
     renderUI();
     
     renderTexture.display();
