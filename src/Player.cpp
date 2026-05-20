@@ -18,6 +18,9 @@ Player::Player()
     bool loadedJump = jumpTexture.loadFromFile("assets/sprites/jumping_animation.png");
     if (!loadedJump) std::cerr << "[ERROR] Gagal load jump sprite!\n";
 
+    bool loadedHurt = hurtTexture.loadFromFile("assets/sprites/hurtanim.png");
+    if (!loadedHurt) std::cerr << "[ERROR] Gagal load hurt sprite!\n";
+
     sprite = sf::Sprite(texture);
     sprite.setTextureRect(sf::IntRect({0, 0}, {32, 32}));
     sprite.setOrigin({16.f, 32.f}); 
@@ -59,6 +62,15 @@ void Player::update(float dt, std::vector<sf::FloatRect>& colliders) {
         }
     }
 
+    // Knockback timer
+    if (isKnockedBack) {
+        knockbackTimer -= dt;
+        if (knockbackTimer <= 0.f) {
+            isKnockedBack  = false;
+            knockbackTimer = 0.f;
+        }
+    }
+
     updateAnimation(dt);
 
     if (isInvincible) {
@@ -77,6 +89,14 @@ void Player::handleMovement(float dt) {
     bool goLeft  = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left)  || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A);
     bool goRight = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right) || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D);
     bool duck    = sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Down)  || sf::Keyboard::isKeyPressed(sf::Keyboard::Key::S);
+
+    if (isKnockedBack) {
+        if (isOnGround) {
+            state = PlayerState::HURT;
+        }
+        flipSprite();
+        return;
+    }
 
     if (!(duck && isOnGround)) {
         if (goLeft)  { moveX = -moveSpeed; facingRight = false; }
@@ -175,6 +195,27 @@ void Player::checkCollisions(std::vector<sf::FloatRect>& colliders) {
 }
 
 void Player::updateAnimation(float dt) {
+    if (isLanding) {
+        sprite.setTexture(jumpTexture);
+        sprite.setTextureRect(sf::IntRect({3 * 32, 0}, {32, 32}));
+        return;
+    }
+
+    // Hurt animation — 6 frame, ikuti progress knockback
+    if (state == PlayerState::HURT) {
+        sprite.setTexture(hurtTexture);
+
+        float ratio = 1.f - (knockbackTimer / knockbackDuration);
+        int hurtFrame = static_cast<int>(ratio * 6.f);
+        if (hurtFrame > 5) hurtFrame = 5;
+        if (hurtFrame < 0) hurtFrame = 0;
+
+        // Frame 0-1: terpental, 2-3: terjatuh, 4-5: bangkit
+        sprite.setTextureRect(sf::IntRect({hurtFrame * 32, 0}, {32, 32}));
+        return;
+    }
+
+
     // Kalau lagi landing, tahan frame 3 — jangan update apapun
     if (isLanding) {
         sprite.setTexture(jumpTexture);
@@ -235,12 +276,20 @@ void Player::flipSprite() {
     }
 }
 
-void Player::takeDamage() {
+void Player::takeDamage(float knockbackDirX) {
     if (isInvincible) return;
     health--;
-    isInvincible = true;
-    invincTimer  = invincTime;
-    state        = PlayerState::HURT;
+    isInvincible    = true;
+    invincTimer     = invincTime;
+    isKnockedBack   = true;
+    knockbackTimer  = knockbackDuration;
+    state           = PlayerState::HURT;
+
+    // Terpental menjauh — arah ditentukan dari luar
+    float knockbackSpeed = 120.f;
+    velocity.x = knockbackDirX * knockbackSpeed;
+    velocity.y = -80.f; // sedikit ke atas biar berasa
+
     std::cout << "[Player] Health: " << health << "/" << maxHealth << "\n";
 }
 

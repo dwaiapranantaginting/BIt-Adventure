@@ -13,7 +13,7 @@ public:
     void         setPosition(float x, float y);
     sf::Sprite&  getSprite();
     sf::Vector2f getPosition();
-    void         takeDamage();
+    void takeDamage(float knockbackDirX = 0.f);
     int          getHealth() { return health; }
 
 private:
@@ -55,4 +55,10 @@ private:
     float landingTime  = 0.12f; // berapa lama frame landing ditampilkan
     bool  isLanding    = false;
     bool  wasInAir = false;
+
+    sf::Texture hurtTexture;
+
+    float knockbackTimer    = 1.5f;
+    float knockbackDuration = 1.0f; // durasi terpental
+    bool  isKnockedBack     = false;
 };

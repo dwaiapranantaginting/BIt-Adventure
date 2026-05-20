@@ -167,7 +167,7 @@ void Boss::updateAnimation(float dt) {
 
             case BossState::ATTACK:
                 sprite.setTexture(attackTexture);
-                if (currentFrame >= 3) {
+                if (currentFrame >= 5) {
                     // Animasi attack selesai
                     currentFrame   = 0;
                     isAttacking    = false;
@@ -200,7 +200,7 @@ sf::FloatRect Boss::getBounds() {
 
 bool Boss::shouldDamagePlayer() {
     // Damage di frame ke-2 (frame terakhir sebelum selesai)
-    if (isAttacking && currentFrame == 2 && !hasDealtDamage) {
+    if (isAttacking && currentFrame == 4 && !hasDealtDamage) {
         hasDealtDamage = true;
         return true;
     }

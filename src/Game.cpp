@@ -167,8 +167,10 @@ void Game::update(float dt) {
             float dy = playerPos.y - bossCenterY;
             float dist = std::sqrt(dx*dx + dy*dy);
 
-            if (dist <= 48.f) { // sedikit lebih besar dari attackRange
-                player.takeDamage();
+            if (dist <= 48.f) {
+                // Hitung arah knockback (menjauh dari boss)
+                float dirX = (dist > 0.f) ? (dx / dist) : 1.f;
+                player.takeDamage(dirX);
             }
         }
     }
