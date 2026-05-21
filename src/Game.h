@@ -38,4 +38,13 @@ private:
     void renderUI();
 
     Boss* boss = nullptr;
+
+    enum class GameState { PLAYING, GAME_OVER };
+    GameState gameState = GameState::PLAYING;
+
+    // Game over screen
+    sf::RectangleShape gameOverBg;
+    sf::Font           gameOverFont;
+    sf::Text*          gameOverText = nullptr;
+    bool               fontLoaded  = false;
 };

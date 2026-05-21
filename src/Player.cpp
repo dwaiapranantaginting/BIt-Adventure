@@ -21,6 +21,9 @@ Player::Player()
     bool loadedHurt = hurtTexture.loadFromFile("assets/sprites/hurtanim.png");
     if (!loadedHurt) std::cerr << "[ERROR] Gagal load hurt sprite!\n";
 
+    bool loadedDeath = deathTexture.loadFromFile("assets/sprites/deathanimasi.png");
+    if (!loadedDeath) std::cerr << "[ERROR] Gagal load death sprite!\n";
+
     sprite = sf::Sprite(texture);
     sprite.setTextureRect(sf::IntRect({0, 0}, {32, 32}));
     sprite.setOrigin({16.f, 32.f}); 
@@ -38,6 +41,11 @@ void Player::handleInput() {
 }
 
 void Player::update(float dt, std::vector<sf::FloatRect>& colliders) {
+    if (isDead && !isKnockedBack) {
+        updateDeathAnimation(dt);
+        return;
+    }
+
     handleMovement(dt);
     if (wantsJump) handleJump();
     applyGravity(dt);
@@ -69,6 +77,11 @@ void Player::update(float dt, std::vector<sf::FloatRect>& colliders) {
             isKnockedBack  = false;
             knockbackTimer = 0.f;
         }
+    }
+
+    if (isDead) {
+        updateDeathAnimation(dt);
+        return;
     }
 
     updateAnimation(dt);
@@ -194,6 +207,25 @@ void Player::checkCollisions(std::vector<sf::FloatRect>& colliders) {
     }
 }
 
+void Player::updateDeathAnimation(float dt) {
+    if (deathDone) return;
+
+    deathTimer += dt;
+    if (deathTimer >= deathSpeed) {
+        deathTimer = 0.f;
+        deathFrame++;
+
+        if (deathFrame >= 23) {
+            deathFrame = 22; // tahan di frame terakhir
+            deathDone  = true;
+            return;
+        }
+    }
+
+    sprite.setTexture(deathTexture);
+    sprite.setTextureRect(sf::IntRect({deathFrame * 32, 0}, {32, 32}));
+}
+
 void Player::updateAnimation(float dt) {
     if (isLanding) {
         sprite.setTexture(jumpTexture);
@@ -277,18 +309,30 @@ void Player::flipSprite() {
 }
 
 void Player::takeDamage(float knockbackDirX) {
-    if (isInvincible) return;
+    if (isInvincible || isDead) return;
     health--;
+
+    if (health <= 0) {
+        // Tetap terpental dulu sebelum death animation
+        isDead          = true;
+        isKnockedBack   = true;
+        knockbackTimer  = knockbackDuration;
+        float knockbackSpeed = 120.f;
+        velocity.x = knockbackDirX * knockbackSpeed;
+        velocity.y = -80.f;
+        state           = PlayerState::HURT;
+        return;
+    }
+
     isInvincible    = true;
     invincTimer     = invincTime;
     isKnockedBack   = true;
     knockbackTimer  = knockbackDuration;
     state           = PlayerState::HURT;
 
-    // Terpental menjauh — arah ditentukan dari luar
     float knockbackSpeed = 120.f;
     velocity.x = knockbackDirX * knockbackSpeed;
-    velocity.y = -80.f; // sedikit ke atas biar berasa
+    velocity.y = -80.f;
 
     std::cout << "[Player] Health: " << health << "/" << maxHealth << "\n";
 }

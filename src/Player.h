@@ -15,6 +15,8 @@ public:
     sf::Vector2f getPosition();
     void takeDamage(float knockbackDirX = 0.f);
     int          getHealth() { return health; }
+    bool isDying()    { return isDead; }
+    bool isDeathDone(){ return deathDone; }
 
 private:
     void applyGravity(float dt);
@@ -23,6 +25,7 @@ private:
     void checkCollisions(std::vector<sf::FloatRect>& colliders);
     void updateAnimation(float dt);
     void flipSprite();
+    void updateDeathAnimation(float dt);
 
     sf::Texture  texture;
     sf::Texture  runTexture;
@@ -61,4 +64,12 @@ private:
     float knockbackTimer    = 1.5f;
     float knockbackDuration = 1.0f; // durasi terpental
     bool  isKnockedBack     = false;
+
+    sf::Texture deathTexture;
+
+    bool  isDead       = false;
+    bool  deathDone    = false;
+    float deathTimer   = 0.f;
+    float deathSpeed   = 0.1f; // kecepatan tiap frame death
+    int   deathFrame   = 0;
 };

@@ -28,34 +28,38 @@ Game::Game()
     background.setFillColor(sf::Color(135, 206, 235));
     background.setPosition({0.f, 0.f});
 
-    // --- MEMBUAT LEVEL BERLUBANG ---
     float currentX = 0.f;
     float groundTopY = (float)INTERNAL_H - 48.f;
 
-    for (float y = 0.f; y < groundTopY; y += 16.f) {
-        // Angka 16.f di sini mengatur agar lebarnya pas 1 tile (1 kolom)
+    for (float y = 0.f; y < groundTopY; y += 16.f)
         platforms.emplace_back(0.f, y, 16.f, PlatformType::BOTTOM);
+
+    // Game over screen
+    gameOverBg.setSize({(float)INTERNAL_W, (float)INTERNAL_H});
+    gameOverBg.setFillColor(sf::Color(0, 0, 0, 180));
+    gameOverBg.setPosition({0.f, 0.f});
+
+    if (gameOverFont.openFromFile("assets/fonts/font.ttf")) {
+        gameOverText = new sf::Text(gameOverFont);
+        gameOverText->setString("GAME OVER");
+        gameOverText->setCharacterSize(20);
+        gameOverText->setFillColor(sf::Color::White);
+        gameOverText->setPosition({80.f, 80.f});
+        fontLoaded = true;
     }
 
     // Segmen Tanah 1
-    createGroundSegment(currentX, 300.f); 
-    
-    // Memberikan jeda / lubang selebar 48px
-    currentX += 300.f + 48.f; 
+    createGroundSegment(currentX, 300.f);
+    currentX += 300.f + 48.f;
 
     // Segmen Tanah 2
     createGroundSegment(currentX, 320.f);
-    
-    // Memberikan lubang yang lebih lebar (64px)
     currentX += 320.f + 64.f;
 
     // Segmen Tanah 3
     createGroundSegment(currentX, 1000.f);
 
-    // Spawn player di atas tanah pertama
-    player.setPosition(40.f, (float)INTERNAL_H - 44.f); 
-
-    // Spawn boss di segmen tanah 3, bisa diubah koordinatnya
+    player.setPosition(40.f, (float)INTERNAL_H - 44.f);
     boss = new Boss(100.f, (float)INTERNAL_H - 80.f);
 
     uiView = sf::View(sf::FloatRect({0.f, 0.f},
@@ -65,13 +69,9 @@ Game::Game()
 }
 
 void Game::createGroundSegment(float x, float width) {
-    // Baris atas
     platforms.emplace_back(x, (float)INTERNAL_H - 48.f, width, PlatformType::TOP);
-    // Dua baris bawah untuk kedalaman
     platforms.emplace_back(x, (float)INTERNAL_H - 32.f, width, PlatformType::BOTTOM);
     platforms.emplace_back(x, (float)INTERNAL_H - 16.f, width, PlatformType::BOTTOM);
-
-
 }
 
 void Game::loadUI() {
@@ -84,11 +84,8 @@ void Game::loadUI() {
         return;
     }
 
-    // Buat 3 sprite heart, posisi dari kiri atas
-    // Jarak antar heart: 10px (8px lebar + 2px gap)
     for (int i = 0; i < 3; i++) {
         heartSprites[i] = new sf::Sprite(heartFullTex);
-        // Scale 1x karena sudah di render texture 320x180
         heartSprites[i]->setScale({1.f, 1.f});
         heartSprites[i]->setPosition({4.f + i * 10.f, 4.f});
     }
@@ -101,7 +98,6 @@ void Game::renderUI() {
 
     int hp = player.getHealth();
 
-    // Switch texture tiap heart sesuai health
     for (int i = 0; i < 3; i++) {
         if (i < hp)
             heartSprites[i]->setTexture(heartFullTex);
@@ -109,12 +105,9 @@ void Game::renderUI() {
             heartSprites[i]->setTexture(heartEmptyTex);
     }
 
-    // Pakai uiView agar tidak ikut kamera
     renderTexture.setView(uiView);
     for (int i = 0; i < 3; i++)
         renderTexture.draw(*heartSprites[i]);
-
-    // Kembalikan view ke kamera game
     renderTexture.setView(camera);
 }
 
@@ -142,33 +135,39 @@ void Game::handleInput() {
 }
 
 void Game::update(float dt) {
+    if (gameState == GameState::GAME_OVER) return;
+
     std::vector<sf::FloatRect> colliders;
     for (auto& p : platforms)
         colliders.push_back(p.getBounds());
 
     player.update(dt, colliders);
 
-    // --- LOGIKA JATUH KE LUBANG ---
+    // Cek death animation selesai
+    if (player.isDeathDone()) {
+        gameState = GameState::GAME_OVER;
+        return;
+    }
+
+    // Jatuh ke lubang
     if (player.getPosition().y > INTERNAL_H + 50.f) {
         std::cout << "[INFO] Player jatuh ke lubang! Reset...\n";
-        player.setPosition(40.f, (float)INTERNAL_H - 64.f); // Kembalikan ke titik awal
+        player.setPosition(40.f, (float)INTERNAL_H - 44.f);
     }
+
     // Update boss
     if (boss) {
         boss->update(dt, player.getPosition(), colliders);
 
-        // Damage hanya saat frame terakhir attack
         if (boss->shouldDamagePlayer()) {
             sf::FloatRect bossBounds = boss->getBounds();
             float bossCenterX = bossBounds.position.x + bossBounds.size.x / 2.f;
-            float bossCenterY = bossBounds.position.y + bossBounds.size.y / 2.f;
             sf::Vector2f playerPos = player.getPosition();
             float dx = playerPos.x - bossCenterX;
-            float dy = playerPos.y - bossCenterY;
+            float dy = playerPos.y - (bossBounds.position.y + bossBounds.size.y / 2.f);
             float dist = std::sqrt(dx*dx + dy*dy);
 
             if (dist <= 48.f) {
-                // Hitung arah knockback (menjauh dari boss)
                 float dirX = (dist > 0.f) ? (dx / dist) : 1.f;
                 player.takeDamage(dirX);
             }
@@ -191,10 +190,18 @@ void Game::render() {
         p.draw(renderTexture);
 
     renderTexture.draw(player.getSprite());
-
     if (boss) boss->draw(renderTexture);
     renderUI();
-    
+
+    // Game over overlay
+    if (gameState == GameState::GAME_OVER) {
+        renderTexture.setView(uiView);
+        renderTexture.draw(gameOverBg);
+        if (fontLoaded && gameOverText)
+            renderTexture.draw(*gameOverText);
+        renderTexture.setView(camera);
+    }
+
     renderTexture.display();
 
     renderSprite->setTexture(renderTexture.getTexture());
