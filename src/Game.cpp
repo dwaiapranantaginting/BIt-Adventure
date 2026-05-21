@@ -15,7 +15,7 @@ Game::Game()
 
     if (!renderTexture.resize({INTERNAL_W, INTERNAL_H}))
         std::cerr << "[ERROR] Gagal buat render texture!\n";
-    renderTexture.clear(sf::Color(135, 206, 235));
+    renderTexture.clear(sf::Color(0, 0, 0));
     renderTexture.display();
 
     renderSprite = new sf::Sprite(renderTexture.getTexture());
@@ -24,9 +24,14 @@ Game::Game()
         (float)WINDOW_H / (float)INTERNAL_H
     });
 
-    background.setSize({10000.f, (float)INTERNAL_H});
-    background.setFillColor(sf::Color(135, 206, 235));
-    background.setPosition({0.f, 0.f});
+    if (bgTexture.loadFromFile("assets/ui/background.png")) {
+        bgSprite = new sf::Sprite(bgTexture);
+        
+        // Scale lebih besar dari layar (1.5x) biar ada ruang gerak parallax
+        float scaleX = (float)INTERNAL_W * 1.5f / bgTexture.getSize().x;
+        float scaleY = (float)INTERNAL_H / bgTexture.getSize().y;
+        bgSprite->setScale({scaleX, scaleY});
+    }
 
     float currentX = 0.f;
     float groundTopY = (float)INTERNAL_H - 48.f;
@@ -183,9 +188,26 @@ void Game::update(float dt) {
 }
 
 void Game::render() {
-    renderTexture.clear(sf::Color(135, 206, 235));
-    renderTexture.draw(background);
+    renderTexture.clear(sf::Color(0, 0, 0));
 
+    // Parallax background
+    if (bgSprite) {
+        float camOffsetX = camera.getCenter().x - (float)INTERNAL_W / 2.f;
+        float parallaxX = -camOffsetX * 0.2f; // 0.2x sangat lambat
+        
+        // Clamp biar tidak keluar batas
+        float bgScaledW = bgTexture.getSize().x * bgSprite->getScale().x;
+        float minX = -((float)bgScaledW - (float)INTERNAL_W);
+        if (parallaxX < minX) parallaxX = minX;
+        if (parallaxX > 0.f) parallaxX = 0.f;
+        
+        bgSprite->setPosition({parallaxX, 0.f});
+        renderTexture.setView(uiView);
+        renderTexture.draw(*bgSprite);
+        renderTexture.setView(camera);
+    }
+
+    // Game objects — cukup SEKALI
     for (auto& p : platforms)
         p.draw(renderTexture);
 

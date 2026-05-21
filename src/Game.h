@@ -47,4 +47,7 @@ private:
     sf::Font           gameOverFont;
     sf::Text*          gameOverText = nullptr;
     bool               fontLoaded  = false;
+
+        sf::Texture bgTexture;
+    sf::Sprite* bgSprite = nullptr;
 };
