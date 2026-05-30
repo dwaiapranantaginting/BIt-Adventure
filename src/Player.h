@@ -1,12 +1,14 @@
 #pragma once
 #include <SFML/Graphics.hpp>
 #include <vector>
+#include "Laser.h"
 
-enum class PlayerState { IDLE, RUN, JUMP, DUCK, HURT };
+enum class PlayerState { IDLE, RUN, JUMP, DUCK, HURT, SHOOT };
 
 class Player {
 public:
     Player();
+    bool mouseWasPressed = false;
 
     void         handleInput();
     void         update(float dt, std::vector<sf::FloatRect>& colliders);
@@ -18,6 +20,9 @@ public:
     bool isDying()    { return isDead; }
     bool isDeathDone(){ return deathDone; }
 
+    void         handleShoot(sf::Vector2i mousePos, sf::RenderWindow& window);
+    std::vector<Laser>& getLasers() { return lasers; } 
+
 private:
     void applyGravity(float dt);
     void handleMovement(float dt);
@@ -26,6 +31,7 @@ private:
     void updateAnimation(float dt);
     void flipSprite();
     void updateDeathAnimation(float dt);
+    void updateShootAnimation(float dt);
 
     sf::Texture  texture;
     sf::Texture  runTexture;
@@ -61,7 +67,7 @@ private:
 
     sf::Texture hurtTexture;
 
-    float knockbackTimer    = 1.5f;
+    float knockbackTimer    = 0.f;
     float knockbackDuration = 1.0f; // durasi terpental
     bool  isKnockedBack     = false;
 
@@ -72,4 +78,15 @@ private:
     float deathTimer   = 0.f;
     float deathSpeed   = 0.1f; // kecepatan tiap frame death
     int   deathFrame   = 0;
+
+    sf::Texture        shootTexture;
+    std::vector<Laser> lasers;
+
+    bool  isShooting    = false;
+    int   shootFrame    = 0;
+    float shootTimer    = 0.f;
+    float shootAnimSpeed[3] = {1.0f, 1.0f, 1.0f}; // charge, laser, recovery
+    bool  laserSpawned  = false;
+    bool  canShoot      = true;
+    float shootCooldown = 0.f;
 };

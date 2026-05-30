@@ -137,6 +137,9 @@ void Game::run() {
 
 void Game::handleInput() {
     player.handleInput();
+
+    sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+    player.handleShoot(mousePos, window);
 }
 
 void Game::update(float dt) {
@@ -158,6 +161,16 @@ void Game::update(float dt) {
     if (player.getPosition().y > INTERNAL_H + 50.f) {
         std::cout << "[INFO] Player jatuh ke lubang! Reset...\n";
         player.setPosition(40.f, (float)INTERNAL_H - 44.f);
+    }
+
+    if (boss) {
+        for (auto& l : player.getLasers()) {
+            if (l.isAlive() && boss->getBounds()
+                    .findIntersection(l.getBounds())) {
+                // Boss tidak bisa mati, tapi bisa tambah efek nanti
+                std::cout << "[HIT] Laser kena boss!\n";
+            }
+        }
     }
 
     // Update boss
@@ -212,6 +225,10 @@ void Game::render() {
         p.draw(renderTexture);
 
     renderTexture.draw(player.getSprite());
+
+    for (auto& l : player.getLasers())
+        l.draw(renderTexture);
+        
     if (boss) boss->draw(renderTexture);
     renderUI();
 

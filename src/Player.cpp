@@ -24,6 +24,9 @@ Player::Player()
     bool loadedDeath = deathTexture.loadFromFile("assets/sprites/deathanimasi.png");
     if (!loadedDeath) std::cerr << "[ERROR] Gagal load death sprite!\n";
 
+    bool loadedShoot = shootTexture.loadFromFile("assets/sprites/shooting.png");
+    if (!loadedShoot) std::cerr << "[ERROR] Gagal load shoot sprite!\n";
+
     sprite = sf::Sprite(texture);
     sprite.setTextureRect(sf::IntRect({0, 0}, {32, 32}));
     sprite.setOrigin({16.f, 32.f}); 
@@ -46,31 +49,49 @@ void Player::update(float dt, std::vector<sf::FloatRect>& colliders) {
         return;
     }
 
+    if (shootCooldown > 0.f) {
+        shootCooldown -= dt;
+    }
+
     handleMovement(dt);
     if (wantsJump) handleJump();
-    applyGravity(dt);
+
+    if (!isShooting || !isOnGround) {
+        applyGravity(dt);
+    }
+
+    if (isShooting && isOnGround) {
+        velocity.y = 0.f;
+    }
+
     sprite.move(velocity * dt);
 
-    bool wasOnGround = isOnGround; // simpan state sebelumnya
+    bool wasOnGround = isOnGround;
     isOnGround = false;
     checkCollisions(colliders);
 
-    // Baru mendarat = sebelumnya di udara, sekarang di tanah
-    if (!wasOnGround && isOnGround && !isLanding) {
-        isLanding    = true;
-        landingTimer = landingTime;
-    }
-
-    // Landing timer
-    if (isOnGround && isLanding) {
-        landingTimer -= dt;
-        if (landingTimer <= 0.f) {
-            isLanding    = false;
-            landingTimer = 0.f;
+    // --- PERBAIKAN DI SINI ---
+    // Hanya urus sistem landing jika player TIDAK sedang menembak
+    if (!isShooting) { 
+        if (!wasOnGround && isOnGround && !isLanding) {
+            isLanding    = true;
+            landingTimer = landingTime;
         }
-    }
 
-    // Knockback timer
+        if (isOnGround && isLanding) {
+            landingTimer -= dt;
+            if (landingTimer <= 0.f) {
+                isLanding    = false;
+                landingTimer = 0.f;
+            }
+        }
+    } else {
+        // Jika sedang menembak, matikan status landing agar animasinya tidak bentrok
+        isLanding = false; 
+        landingTimer = 0.f;
+    }
+    // -------------------------
+
     if (isKnockedBack) {
         knockbackTimer -= dt;
         if (knockbackTimer <= 0.f) {
@@ -79,13 +100,21 @@ void Player::update(float dt, std::vector<sf::FloatRect>& colliders) {
         }
     }
 
-    if (isDead) {
-        updateDeathAnimation(dt);
-        return;
+    if (isShooting) {
+        updateShootAnimation(dt);
     }
+
+    // Pembersihan laser
+    for (auto& l : lasers)
+        l.update(dt);
+    lasers.erase(
+        std::remove_if(lasers.begin(), lasers.end(),
+            [](Laser& l){ return !l.isAlive(); }),
+        lasers.end());
 
     updateAnimation(dt);
 
+    // Efek invincible kedip-kedip
     if (isInvincible) {
         invincTimer -= dt;
         int flicker = static_cast<int>(invincTimer * 10) % 2;
@@ -107,6 +136,13 @@ void Player::handleMovement(float dt) {
         if (isOnGround) {
             state = PlayerState::HURT;
         }
+        flipSprite();
+        return;
+    }
+
+    if (isShooting) {
+        velocity.x = 0.f;
+        state      = PlayerState::SHOOT; // pastikan state SHOOT
         flipSprite();
         return;
     }
@@ -141,6 +177,24 @@ void Player::handleJump() {
     isLanding    = false;
     state        = PlayerState::JUMP;
     wantsJump    = false;
+}
+
+void Player::handleShoot(sf::Vector2i mousePos, sf::RenderWindow& window) {
+    bool mouseNow = sf::Mouse::isButtonPressed(sf::Mouse::Button::Left);
+
+    // Hanya trigger saat baru diklik (bukan held)
+    if (mouseNow && !mouseWasPressed) {
+        if (canShoot && !isShooting && !isDead && !isKnockedBack) {
+            isShooting   = true;
+            shootFrame   = 0;
+            shootTimer   = 0.f;
+            laserSpawned = false;
+            canShoot     = false;
+            state        = PlayerState::SHOOT;
+        }
+    }
+
+    mouseWasPressed = mouseNow;
 }
 
 void Player::applyGravity(float dt) {
@@ -207,6 +261,42 @@ void Player::checkCollisions(std::vector<sf::FloatRect>& colliders) {
     }
 }
 
+void Player::updateShootAnimation(float dt) {
+    float spd = 0.3f; // Kecepatan animasi jurus pamungkas
+
+    shootTimer += dt;
+    if (shootTimer >= spd) {
+        shootTimer = 0.f;
+        shootFrame++;
+
+        // KUNCI JURUS: Hanya spawn SATU laser tepat di frame 13
+        if (shootFrame >= 13 && shootFrame <= 17) {
+            if (!laserSpawned) {
+                // DEBUG — cek nilai facingRight
+                std::cout << "[DEBUG] Spawn laser, facingRight = " << facingRight << "\n";
+                
+                float laserX = sprite.getPosition().x + (facingRight ? 24.f : -24.f);
+                float laserY = sprite.getPosition().y - 22.f;
+                
+                lasers.emplace_back(laserX, laserY, facingRight);
+                laserSpawned = true;
+            }
+        }
+
+        if (shootFrame >= 23) {
+            shootFrame   = 0;
+            isShooting   = false;
+            laserSpawned = false; // Reset untuk tembakan berikutnya
+            canShoot     = true;
+            state        = PlayerState::IDLE;
+            shootCooldown = 5.0f; // Cooldown jurus pamungkas
+        }
+    }
+
+    sprite.setTexture(shootTexture);
+    sprite.setTextureRect(sf::IntRect({shootFrame * 32, 0}, {32, 32}));
+}
+
 void Player::updateDeathAnimation(float dt) {
     if (deathDone) return;
 
@@ -227,40 +317,38 @@ void Player::updateDeathAnimation(float dt) {
 }
 
 void Player::updateAnimation(float dt) {
-    if (isLanding) {
-        sprite.setTexture(jumpTexture);
-        sprite.setTextureRect(sf::IntRect({3 * 32, 0}, {32, 32}));
-        return;
-    }
-
-    // Hurt animation — 6 frame, ikuti progress knockback
+    // 1. Jika sedang terluka, prioritaskan animasi HURT
     if (state == PlayerState::HURT) {
         sprite.setTexture(hurtTexture);
-
         float ratio = 1.f - (knockbackTimer / knockbackDuration);
         int hurtFrame = static_cast<int>(ratio * 6.f);
         if (hurtFrame > 5) hurtFrame = 5;
         if (hurtFrame < 0) hurtFrame = 0;
-
-        // Frame 0-1: terpental, 2-3: terjatuh, 4-5: bangkit
         sprite.setTextureRect(sf::IntRect({hurtFrame * 32, 0}, {32, 32}));
         return;
     }
 
+    // KUNCI UTAMA: Jika sedang menembak, JANGAN UPDATE animasi basic apa pun di fungsi ini!
+    // Biarkan fungsi updateShootAnimation() yang mengontrol penuh sprite.setTexture-nya.
+    if (isShooting || state == PlayerState::SHOOT) {
+        return; 
+    }
 
-    // Kalau lagi landing, tahan frame 3 — jangan update apapun
+    // Kalau lagi landing biasa (tidak sedang nembak), tahan frame 3
     if (isLanding) {
         sprite.setTexture(jumpTexture);
         sprite.setTextureRect(sf::IntRect({3 * 32, 0}, {32, 32}));
         return;
     }
 
+    // Reset frame jika state karakter baru saja berubah
     if (state != prevState) {
         currentFrame = 0;
         animTimer    = 0.f;
         prevState    = state;
     }
 
+    // Jalankan timer untuk memperbarui frame animasi (IDLE / RUN / JUMP)
     animTimer += dt;
     if (animTimer >= animSpeed) {
         animTimer = 0.f;
@@ -291,6 +379,10 @@ void Player::updateAnimation(float dt) {
                 sprite.setTextureRect(sf::IntRect({currentFrame * 32, 0}, {32, 32}));
                 break;
 
+            case PlayerState::SHOOT:
+                // Sudah dihandle di updateShootAnimation
+                break;
+
             default:
                 currentFrame = 0;
                 break;
@@ -312,8 +404,16 @@ void Player::takeDamage(float knockbackDirX) {
     if (isInvincible || isDead) return;
     health--;
 
+    // Batalkan shooting jika sedang berlangsung
+    if (isShooting) {
+        isShooting   = false;
+        shootFrame   = 0;
+        shootTimer   = 0.f;
+        laserSpawned = false;
+        canShoot     = true;
+    }
+
     if (health <= 0) {
-        // Tetap terpental dulu sebelum death animation
         isDead          = true;
         isKnockedBack   = true;
         knockbackTimer  = knockbackDuration;
@@ -336,6 +436,7 @@ void Player::takeDamage(float knockbackDirX) {
 
     std::cout << "[Player] Health: " << health << "/" << maxHealth << "\n";
 }
+
 
 void Player::setPosition(float x, float y) {
     sprite.setPosition({x, y});
