@@ -262,7 +262,7 @@ void Player::checkCollisions(std::vector<sf::FloatRect>& colliders) {
 }
 
 void Player::updateShootAnimation(float dt) {
-    float spd = 0.3f; // Kecepatan animasi jurus pamungkas
+    float spd = 0.2f; // Kecepatan animasi jurus pamungkas
 
     shootTimer += dt;
     if (shootTimer >= spd) {

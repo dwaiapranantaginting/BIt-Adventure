@@ -1,6 +1,7 @@
 #include "Game.h"
 #include <iostream>
 #include <cmath>
+#include <algorithm>
 
 static const unsigned int INTERNAL_W = 320;
 static const unsigned int INTERNAL_H = 180;
@@ -65,7 +66,12 @@ Game::Game()
     createGroundSegment(currentX, 1000.f);
 
     player.setPosition(40.f, (float)INTERNAL_H - 44.f);
-    boss = new Boss(100.f, (float)INTERNAL_H - 80.f);
+
+    boss = new Boss(3000.f, (float)INTERNAL_H - 80.f);
+
+    spawners.push_back({200.f, 195.f, (float)INTERNAL_H - 80.f, 2, false});
+
+    spawners.push_back({700.f, 695.f, (float)INTERNAL_H - 100.f, 3, false});
 
     uiView = sf::View(sf::FloatRect({0.f, 0.f},
         {(float)INTERNAL_W, (float)INTERNAL_H}));
@@ -151,6 +157,52 @@ void Game::update(float dt) {
 
     player.update(dt, colliders);
 
+    // --- CEK SPAWNER MUSUH ---
+    for (auto& spawner : spawners) {
+        if (!spawner.triggered && player.getPosition().x >= spawner.triggerX) {
+            spawner.triggered = true;
+            std::cout << "[INFO] Spawn " << spawner.count << " Musuh!\n";
+            
+            // PERBAIKAN: Beri jarak X sejauh 80 pixel antar musuh agar tidak menyatu.
+            // Posisi Y disamakan saja agar mereka berjejer rapi di tanah/udara.
+            for (int i = 0; i < spawner.count; i++) {
+                enemies.emplace_back(spawner.spawnX + (i * 80.f), spawner.spawnY);
+            }
+        }
+    }
+
+    // --- UPDATE MUSUH & CEK COLLISION ---
+    // --- UPDATE MUSUH & CEK COLLISION ---
+    for (auto& enemy : enemies) {
+        enemy.update(dt, player.getPosition());
+
+        // 1. Cek apakah peluru musuh mengenai player
+        for (auto& proj : enemy.getProjectiles()) {
+            // UBAH .intersects() menjadi .findIntersection()
+            if (proj.isAlive() && proj.getBounds().findIntersection(player.getSprite().getGlobalBounds())) {
+                proj.kill();
+                player.takeDamage(-1.f); // Pentalin player
+            }
+        }
+
+        // 2. Cek apakah laser Kamehameha player mengenai musuh
+        if (!enemy.isDead) {
+            for (auto& laser : player.getLasers()) {
+                // UBAH .intersects() menjadi .findIntersection()
+                if (laser.isAlive() && laser.getBounds().findIntersection(enemy.getBounds())) {
+                    enemy.takeDamage();
+                    // laser.kill(); <-- Uncomment ini jika kamu mau lasernya tembus/hilang saat kena musuh
+                }
+            }
+        }
+    }
+
+    // Hapus musuh yang animasinya matinya sudah selesai
+    enemies.erase(
+        std::remove_if(enemies.begin(), enemies.end(),
+            [](Enemy& e){ return e.isDeathDone; }),
+        enemies.end());
+
     // Cek death animation selesai
     if (player.isDeathDone()) {
         gameState = GameState::GAME_OVER;
@@ -228,6 +280,10 @@ void Game::render() {
 
     for (auto& l : player.getLasers())
         l.draw(renderTexture);
+
+    for (auto& enemy : enemies) {
+        enemy.draw(renderTexture);
+    }
         
     if (boss) boss->draw(renderTexture);
     renderUI();

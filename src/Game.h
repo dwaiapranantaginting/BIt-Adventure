@@ -4,6 +4,7 @@
 #include "Platform.h"
 #include <vector>
 #include "Boss.h"
+#include "Enemy.h"
 
 class Game {
 public:
@@ -48,6 +49,17 @@ private:
     sf::Text*          gameOverText = nullptr;
     bool               fontLoaded  = false;
 
-        sf::Texture bgTexture;
+    sf::Texture bgTexture;
     sf::Sprite* bgSprite = nullptr;
+
+    struct EnemySpawner {
+        float triggerX;   // X posisi player untuk men-trigger
+        float spawnX;     // X posisi musuh muncul
+        float spawnY;     // Y posisi musuh muncul
+        int count;        // Berapa banyak sekaligus?
+        bool triggered = false;
+};
+
+std::vector<Enemy> enemies;
+std::vector<EnemySpawner> spawners;
 };

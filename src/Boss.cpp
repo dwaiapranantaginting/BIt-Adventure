@@ -63,7 +63,8 @@ void Boss::chasePlayer(float dt, sf::Vector2f playerPos) {
         currentFrame   = 0;
         animTimer      = 0.f;
         hasDealtDamage = false;
-    } else if (dist > 4.f) {
+    } 
+    else if (dist > 4.f) {
         velocity.x = (dx / dist) * moveSpeed;
         velocity.y = (dy / dist) * moveSpeed;
         state      = BossState::RUN;
