@@ -30,6 +30,19 @@ void Boss::update(float dt, sf::Vector2f playerPos,
 }
 
 void Boss::chasePlayer(float dt, sf::Vector2f playerPos) {
+    if (isKnockedBack) {
+        knockbackTimer -= dt;
+        velocity = knockbackVelocity;
+        if (knockbackTimer <= 0.f) {
+            isKnockedBack = false;
+            knockbackTimer = 0.f;
+            velocity = {0.f, 0.f};
+        }
+        facingRight = (playerPos.x > sprite.getPosition().x);
+        flipSprite();
+        return;
+    }
+
     sf::Vector2f bossPos = sprite.getPosition();
     float dx = playerPos.x - bossPos.x;
     float dy = playerPos.y - bossPos.y;
@@ -137,6 +150,13 @@ void Boss::checkCollisions(std::vector<sf::FloatRect>& colliders) {
                 sprite.getPosition().y));
         }
     }
+}
+
+void Boss::applyKnockback(float dirX) {
+    if (isKnockedBack) return; // tidak bisa kena knockback lagi saat masih kena
+    isKnockedBack      = true;
+    knockbackTimer     = knockbackDuration;
+    knockbackVelocity  = {dirX * 150.f, 0.f};
 }
 
 void Boss::updateAnimation(float dt) {

@@ -12,6 +12,7 @@ public:
     void draw(sf::RenderTarget& target);
     bool shouldDamagePlayer();
     sf::FloatRect getBounds();
+    void applyKnockback(float dirX);
 
 private:
     void applyGravity(float dt);
@@ -52,4 +53,9 @@ private:
 
     float attackCooldown    = 0.f;
     float attackCooldownMax = 0.8f; 
+
+    bool  isKnockedBack    = false;
+    float knockbackTimer   = 0.f;
+    float knockbackDuration = 0.4f;
+    sf::Vector2f knockbackVelocity;
 };

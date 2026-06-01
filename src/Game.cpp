@@ -67,8 +67,6 @@ Game::Game()
 
     player.setPosition(40.f, (float)INTERNAL_H - 44.f);
 
-    boss = new Boss(3000.f, (float)INTERNAL_H - 80.f);
-
     spawners.push_back({200.f, 195.f, (float)INTERNAL_H - 80.f, 2, false});
 
     spawners.push_back({700.f, 695.f, (float)INTERNAL_H - 100.f, 3, false});
@@ -77,6 +75,26 @@ Game::Game()
         {(float)INTERNAL_W, (float)INTERNAL_H}));
 
     loadUI();
+
+    // Setup fade overlay
+    fadeOverlay.setSize({(float)INTERNAL_W, (float)INTERNAL_H});
+    fadeOverlay.setFillColor(sf::Color(0, 0, 0, 0));
+    fadeOverlay.setPosition({0.f, 0.f});
+
+    // Load cave background
+    if (caveBgTexture.loadFromFile("assets/ui/cave_bg.png")) {
+        caveBgSprite = new sf::Sprite(caveBgTexture);
+        float scaleX = (float)INTERNAL_W * 1.5f / caveBgTexture.getSize().x;
+        float scaleY = (float)INTERNAL_H / caveBgTexture.getSize().y;
+        caveBgSprite->setScale({scaleX, scaleY});
+    }
+
+    // Tambah atap goa — platform atas dari x=732 sepanjang 400px
+    // Baris atas (setinggi 0 dari atas)
+    platforms.emplace_back(732.f, 0.f,   400.f, PlatformType::BOTTOM);
+    platforms.emplace_back(732.f, 16.f,  400.f, PlatformType::BOTTOM);
+
+    // Boss spawn di ujung goa tapi belum aktif
 }
 
 void Game::createGroundSegment(float x, float width) {
@@ -151,6 +169,85 @@ void Game::handleInput() {
 void Game::update(float dt) {
     if (gameState == GameState::GAME_OVER) return;
 
+    // --- FADE SYSTEM ---
+    if (fadeState == FadeState::FADE_OUT) {
+        fadeTimer += dt;
+        float alpha = (fadeTimer / fadeOutTime) * 255.f;
+        if (alpha > 255.f) alpha = 255.f;
+        fadeOverlay.setFillColor(sf::Color(0, 0, 0, (uint8_t)alpha));
+
+        if (fadeTimer >= fadeOutTime) {
+            fadeState = FadeState::BLACK;
+            fadeTimer = 0.f;
+        }
+        return; // freeze game saat fade
+    }
+
+    if (fadeState == FadeState::BLACK) {
+        fadeTimer += dt;
+        fadeOverlay.setFillColor(sf::Color(0, 0, 0, 255));
+
+        if (fadeTimer >= blackTime) {
+            fadeState = FadeState::FADE_IN;
+            fadeTimer = 0.f;
+
+            // Semua spawn di sini — layar masih hitam
+            bossSpawned = true;
+            inCave      = true;
+            player.setPosition(750.f, (float)INTERNAL_H - 44.f);
+            boss = new Boss(1050.f, (float)INTERNAL_H - 80.f);
+
+            float newCamX = 750.f;
+            if (newCamX < (float)INTERNAL_W / 2.f)
+                newCamX = (float)INTERNAL_W / 2.f;
+            camera.setCenter({newCamX, (float)INTERNAL_H / 2.f});
+            renderTexture.setView(camera);
+
+            for (float y = 0.f; y < (float)INTERNAL_H; y += 16.f) {
+                platforms.emplace_back(716.f, y, 16.f, PlatformType::BOTTOM);
+            }
+
+            for (float y = 0.f; y < (float)INTERNAL_H; y += 16.f) {
+                platforms.emplace_back(1132.f, y, 16.f, PlatformType::BOTTOM);
+            }
+        }
+        return;
+    }
+
+    if (fadeState == FadeState::FADE_IN) {
+        fadeTimer += dt;
+        float alpha = 255.f - (fadeTimer / fadeInTime) * 255.f;
+        if (alpha < 0.f) alpha = 0.f;
+        fadeOverlay.setFillColor(sf::Color(0, 0, 0, (uint8_t)alpha));
+
+        // Force update kamera ke posisi player sekarang (dengan clamping goa)
+        float camX = player.getPosition().x;
+        float halfWinW = (float)INTERNAL_W / 2.f;
+        if (inCave) {
+            float minCamX = 716.f + halfWinW;
+            float maxCamX = 1132.f - halfWinW;
+            if (camX < minCamX) camX = minCamX;
+            if (camX > maxCamX) camX = maxCamX;
+        } else {
+            if (camX < halfWinW) camX = halfWinW;
+        }
+        camera.setCenter({camX, (float)INTERNAL_H / 2.f});
+        renderTexture.setView(camera);
+
+        if (fadeTimer >= fadeInTime) {
+            fadeState = FadeState::NONE;
+            fadeTimer = 0.f;
+            fadeOverlay.setFillColor(sf::Color(0, 0, 0, 0));
+        }
+    }
+
+    // --- CAVE TRIGGER ---
+    if (!bossSpawned && fadeState == FadeState::NONE
+        && player.getPosition().x >= caveTriggerX) {
+        fadeState = FadeState::FADE_OUT;
+        fadeTimer = 0.f;
+    }
+
     std::vector<sf::FloatRect> colliders;
     for (auto& p : platforms)
         colliders.push_back(p.getBounds());
@@ -162,9 +259,6 @@ void Game::update(float dt) {
         if (!spawner.triggered && player.getPosition().x >= spawner.triggerX) {
             spawner.triggered = true;
             std::cout << "[INFO] Spawn " << spawner.count << " Musuh!\n";
-            
-            // PERBAIKAN: Beri jarak X sejauh 80 pixel antar musuh agar tidak menyatu.
-            // Posisi Y disamakan saja agar mereka berjejer rapi di tanah/udara.
             for (int i = 0; i < spawner.count; i++) {
                 enemies.emplace_back(spawner.spawnX + (i * 80.f), spawner.spawnY);
             }
@@ -172,26 +266,22 @@ void Game::update(float dt) {
     }
 
     // --- UPDATE MUSUH & CEK COLLISION ---
-    // --- UPDATE MUSUH & CEK COLLISION ---
     for (auto& enemy : enemies) {
         enemy.update(dt, player.getPosition());
 
         // 1. Cek apakah peluru musuh mengenai player
         for (auto& proj : enemy.getProjectiles()) {
-            // UBAH .intersects() menjadi .findIntersection()
             if (proj.isAlive() && proj.getBounds().findIntersection(player.getSprite().getGlobalBounds())) {
                 proj.kill();
-                player.takeDamage(-1.f); // Pentalin player
+                player.takeDamage(-1.f); 
             }
         }
 
         // 2. Cek apakah laser Kamehameha player mengenai musuh
         if (!enemy.isDead) {
-            for (auto& laser : player.getLasers()) {
-                // UBAH .intersects() menjadi .findIntersection()
-                if (laser.isAlive() && laser.getBounds().findIntersection(enemy.getBounds())) {
+            for (auto& l : player.getLasers()) {
+                if (l.isAlive() && l.getBounds().findIntersection(enemy.getBounds())) {
                     enemy.takeDamage();
-                    // laser.kill(); <-- Uncomment ini jika kamu mau lasernya tembus/hilang saat kena musuh
                 }
             }
         }
@@ -217,10 +307,11 @@ void Game::update(float dt) {
 
     if (boss) {
         for (auto& l : player.getLasers()) {
-            if (l.isAlive() && boss->getBounds()
-                    .findIntersection(l.getBounds())) {
-                // Boss tidak bisa mati, tapi bisa tambah efek nanti
-                std::cout << "[HIT] Laser kena boss!\n";
+            if (l.isAlive() && boss->getBounds().findIntersection(l.getBounds())) {
+                sf::Vector2f bossPos = boss->getBounds().position;
+                sf::Vector2f playerPos = player.getPosition();
+                float dirX = (bossPos.x > playerPos.x) ? 1.f : -1.f;
+                boss->applyKnockback(dirX);
             }
         }
     }
@@ -244,9 +335,22 @@ void Game::update(float dt) {
         }
     }
 
+    // --- FIX KAMERA CLAMPING (BATAS GOA & BATAS LUAR) ---
     float camX = player.getPosition().x;
-    if (camX < (float)INTERNAL_W / 2.f)
-        camX = (float)INTERNAL_W / 2.f;
+    float halfWinW = (float)INTERNAL_W / 2.f;
+
+    if (inCave) {
+        // Tembok kiri goa di 716.f, tembok kanan di 1132.f
+        float minCamX = 716.f + halfWinW;
+        float maxCamX = 1132.f - halfWinW;
+
+        if (camX < minCamX) camX = minCamX;
+        if (camX > maxCamX) camX = maxCamX;
+    } 
+    else {
+        // Batas dunia luar
+        if (camX < halfWinW) camX = halfWinW;
+    }
 
     camera.setCenter({camX, (float)INTERNAL_H / 2.f});
     renderTexture.setView(camera);
@@ -255,24 +359,36 @@ void Game::update(float dt) {
 void Game::render() {
     renderTexture.clear(sf::Color(0, 0, 0));
 
-    // Parallax background
-    if (bgSprite) {
-        float camOffsetX = camera.getCenter().x - (float)INTERNAL_W / 2.f;
-        float parallaxX = -camOffsetX * 0.2f; // 0.2x sangat lambat
+    float halfWinW = (float)INTERNAL_W / 2.f;
+
+    // Background — ganti saat di goa
+    if (inCave && caveBgSprite) {
+        // PERBAIKAN: Parallax background goa menggunakan posisi kamera yang sudah diclamp
+        float camOffsetX = camera.getCenter().x - halfWinW - 750.f;
+        float parallaxX  = -(camOffsetX * 0.2f);
         
-        // Clamp biar tidak keluar batas
-        float bgScaledW = bgTexture.getSize().x * bgSprite->getScale().x;
-        float minX = -((float)bgScaledW - (float)INTERNAL_W);
+        float bgScaledW  = caveBgTexture.getSize().x * caveBgSprite->getScale().x;
+        float minX       = -((float)bgScaledW - (float)INTERNAL_W);
         if (parallaxX < minX) parallaxX = minX;
-        if (parallaxX > 0.f) parallaxX = 0.f;
         
+        caveBgSprite->setPosition({parallaxX, 0.f});
+        renderTexture.setView(uiView);
+        renderTexture.draw(*caveBgSprite);
+        renderTexture.setView(camera);
+    } else if (bgSprite) {
+        float camOffsetX = camera.getCenter().x - halfWinW;
+        float parallaxX  = -camOffsetX * 0.2f;
+        float bgScaledW  = bgTexture.getSize().x * bgSprite->getScale().x;
+        float minX       = -((float)bgScaledW - (float)INTERNAL_W);
+        if (parallaxX < minX) parallaxX = minX;
+        if (parallaxX > 0.f)  parallaxX = 0.f;
         bgSprite->setPosition({parallaxX, 0.f});
         renderTexture.setView(uiView);
         renderTexture.draw(*bgSprite);
         renderTexture.setView(camera);
     }
 
-    // Game objects — cukup SEKALI
+    // Game objects
     for (auto& p : platforms)
         p.draw(renderTexture);
 
@@ -281,10 +397,9 @@ void Game::render() {
     for (auto& l : player.getLasers())
         l.draw(renderTexture);
 
-    for (auto& enemy : enemies) {
+    for (auto& enemy : enemies)
         enemy.draw(renderTexture);
-    }
-        
+
     if (boss) boss->draw(renderTexture);
     renderUI();
 
@@ -294,6 +409,13 @@ void Game::render() {
         renderTexture.draw(gameOverBg);
         if (fontLoaded && gameOverText)
             renderTexture.draw(*gameOverText);
+        renderTexture.setView(camera);
+    }
+
+    // Fade overlay — SELALU paling atas
+    if (fadeState != FadeState::NONE) {
+        renderTexture.setView(uiView);
+        renderTexture.draw(fadeOverlay);
         renderTexture.setView(camera);
     }
 

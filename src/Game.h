@@ -2,9 +2,9 @@
 #include <SFML/Graphics.hpp>
 #include "Player.h"
 #include "Platform.h"
-#include <vector>
 #include "Boss.h"
 #include "Enemy.h"
+#include <vector>
 
 class Game {
 public:
@@ -16,50 +16,64 @@ private:
     void update(float dt);
     void render();
     void createGroundSegment(float x, float width);
+    void loadUI();
+    void renderUI();
 
-    sf::RenderWindow  window;
-    sf::RenderTexture renderTexture;
-    sf::Sprite* renderSprite = nullptr;
-    sf::View          camera;
-
-    sf::RectangleShape background;
-    Player             player;
+    sf::RenderWindow      window;
+    sf::RenderTexture     renderTexture;
+    sf::Sprite*           renderSprite = nullptr;
+    sf::View              camera;
+    sf::RectangleShape    background;
+    Player                player;
     std::vector<Platform> platforms;
+    sf::Clock             clock;
 
-    sf::Clock clock;
-
-    // ui hati playeer
+    // UI Hearts
     sf::Texture  heartFullTex;
     sf::Texture  heartEmptyTex;
     sf::Sprite*  heartSprites[3] = {nullptr, nullptr, nullptr};
     sf::View     uiView;
     bool         uiLoaded = false;
 
-    void loadUI();
-    void renderUI();
-
+    // Boss
     Boss* boss = nullptr;
 
+    // Enemy & Spawner
+    struct EnemySpawner {
+        float triggerX;
+        float spawnX;
+        float spawnY;
+        int   count;
+        bool  triggered = false;
+    };
+    std::vector<Enemy>        enemies;
+    std::vector<EnemySpawner> spawners;
+
+    // Game State
     enum class GameState { PLAYING, GAME_OVER };
     GameState gameState = GameState::PLAYING;
 
-    // Game over screen
+    // Game Over Screen
     sf::RectangleShape gameOverBg;
     sf::Font           gameOverFont;
     sf::Text*          gameOverText = nullptr;
     bool               fontLoaded  = false;
 
+    // Background
     sf::Texture bgTexture;
-    sf::Sprite* bgSprite = nullptr;
+    sf::Sprite* bgSprite    = nullptr;
+    sf::Texture caveBgTexture;
+    sf::Sprite* caveBgSprite = nullptr;
+    bool        inCave       = false;
 
-    struct EnemySpawner {
-        float triggerX;   // X posisi player untuk men-trigger
-        float spawnX;     // X posisi musuh muncul
-        float spawnY;     // Y posisi musuh muncul
-        int count;        // Berapa banyak sekaligus?
-        bool triggered = false;
-};
-
-std::vector<Enemy> enemies;
-std::vector<EnemySpawner> spawners;
+    // Fade System
+    enum class FadeState { NONE, FADE_OUT, BLACK, FADE_IN };
+    FadeState          fadeState   = FadeState::NONE;
+    float              fadeTimer   = 0.f;
+    float              fadeOutTime = 0.8f;
+    float              blackTime   = 0.5f;
+    float              fadeInTime  = 0.8f;
+    sf::RectangleShape fadeOverlay;
+    bool               bossSpawned = false;
+    float              caveTriggerX = 732.f;
 };
