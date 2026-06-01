@@ -14,6 +14,11 @@ public:
     sf::FloatRect getBounds();
     void applyKnockback(float dirX);
 
+    void forcePacify();
+    void forceWalkRight(float dt);
+
+    bool isPacified = false;
+
 private:
     void applyGravity(float dt);
     void chasePlayer(float dt, sf::Vector2f playerPos);
@@ -39,7 +44,7 @@ private:
     int   currentFrame = 0;
 
     // Jarak minimum sebelum boss mulai kejar player
-    float chaseRange = 200.f;
+    float chaseRange = 600.f;
 
     sf::Texture  attackTexture;  // tambah ini
 

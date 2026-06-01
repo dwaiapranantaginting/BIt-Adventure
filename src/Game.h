@@ -50,7 +50,7 @@ private:
     std::vector<EnemySpawner> spawners;
 
     // Game State
-    enum class GameState { PLAYING, GAME_OVER };
+    enum class GameState { PLAYING, GAME_OVER, CUTSCENE };
     GameState gameState = GameState::PLAYING;
 
     // Game Over Screen
@@ -76,4 +76,19 @@ private:
     sf::RectangleShape fadeOverlay;
     bool               bossSpawned = false;
     float              caveTriggerX = 732.f;
+
+    // --- CUTSCENE YUTA ---
+    sf::Texture yutaWalkTex;
+    sf::Texture yutaIdleTex;
+
+    sf::Sprite* yutaSprite = nullptr;
+    sf::Text* cutsceneText = nullptr;
+    
+    float       yutaX = 0.f;
+    float       yutaY = 0.f;
+    float       yutaAnimTimer = 0.f;
+    int         yutaFrame = 0;
+    
+    int         cutscenePhase = 0;
+    float       cutsceneTimer = 0.f;
 };

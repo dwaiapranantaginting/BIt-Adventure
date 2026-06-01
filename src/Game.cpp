@@ -54,22 +54,12 @@ Game::Game()
         fontLoaded = true;
     }
 
-    // Segmen Tanah 1
-    createGroundSegment(currentX, 300.f);
-    currentX += 300.f + 48.f;
-
-    // Segmen Tanah 2
-    createGroundSegment(currentX, 320.f);
-    currentX += 320.f + 64.f;
-
-    // Segmen Tanah 3
-    createGroundSegment(currentX, 1000.f);
+    createGroundSegment(currentX, 2000.f);
 
     player.setPosition(40.f, (float)INTERNAL_H - 44.f);
 
-    spawners.push_back({200.f, 195.f, (float)INTERNAL_H - 80.f, 2, false});
-
-    spawners.push_back({700.f, 695.f, (float)INTERNAL_H - 100.f, 3, false});
+    spawners.push_back({700.f, 800.f, (float)INTERNAL_H - 100.f, 3, false});
+    spawners.push_back({700.f, 400.f, (float)INTERNAL_H - 100.f, 3, false});
 
     uiView = sf::View(sf::FloatRect({0.f, 0.f},
         {(float)INTERNAL_W, (float)INTERNAL_H}));
@@ -94,7 +84,19 @@ Game::Game()
     platforms.emplace_back(732.f, 0.f,   400.f, PlatformType::BOTTOM);
     platforms.emplace_back(732.f, 16.f,  400.f, PlatformType::BOTTOM);
 
-    // Boss spawn di ujung goa tapi belum aktif
+    // (Taruh di sembarang tempat di dalam konstruktor Game::Game, misalnya di bawah kode font)
+    
+// --- SETUP ALOKASI YUTA & TEXT (SFML 3 COMPATIBLE) ---
+    yutaWalkTex.loadFromFile("assets/sprites/yuta_walk.png");
+    yutaIdleTex.loadFromFile("assets/sprites/yuta_idle.png");
+    
+    // Buat objek sprite dan text secara dinamis menggunakan pointer
+    yutaSprite = new sf::Sprite(yutaWalkTex);
+    cutsceneText = new sf::Text(gameOverFont); 
+    
+    // Karena sekarang pointer, gunakan tanda panah (->) bukan titik (.)
+    cutsceneText->setCharacterSize(14);
+    cutsceneText->setFillColor(sf::Color::White);
 }
 
 void Game::createGroundSegment(float x, float width) {
@@ -169,186 +171,266 @@ void Game::handleInput() {
 void Game::update(float dt) {
     if (gameState == GameState::GAME_OVER) return;
 
-    // --- FADE SYSTEM ---
-    if (fadeState == FadeState::FADE_OUT) {
-        fadeTimer += dt;
-        float alpha = (fadeTimer / fadeOutTime) * 255.f;
-        if (alpha > 255.f) alpha = 255.f;
-        fadeOverlay.setFillColor(sf::Color(0, 0, 0, (uint8_t)alpha));
-
-        if (fadeTimer >= fadeOutTime) {
-            fadeState = FadeState::BLACK;
-            fadeTimer = 0.f;
-        }
-        return; // freeze game saat fade
-    }
-
-    if (fadeState == FadeState::BLACK) {
-        fadeTimer += dt;
-        fadeOverlay.setFillColor(sf::Color(0, 0, 0, 255));
-
-        if (fadeTimer >= blackTime) {
-            fadeState = FadeState::FADE_IN;
-            fadeTimer = 0.f;
-
-            // Semua spawn di sini — layar masih hitam
-            bossSpawned = true;
-            inCave      = true;
-            player.setPosition(750.f, (float)INTERNAL_H - 44.f);
-            boss = new Boss(1050.f, (float)INTERNAL_H - 80.f);
-
-            float newCamX = 750.f;
-            if (newCamX < (float)INTERNAL_W / 2.f)
-                newCamX = (float)INTERNAL_W / 2.f;
-            camera.setCenter({newCamX, (float)INTERNAL_H / 2.f});
-            renderTexture.setView(camera);
-
-            for (float y = 0.f; y < (float)INTERNAL_H; y += 16.f) {
-                platforms.emplace_back(716.f, y, 16.f, PlatformType::BOTTOM);
-            }
-
-            for (float y = 0.f; y < (float)INTERNAL_H; y += 16.f) {
-                platforms.emplace_back(1132.f, y, 16.f, PlatformType::BOTTOM);
-            }
-        }
-        return;
-    }
-
-    if (fadeState == FadeState::FADE_IN) {
-        fadeTimer += dt;
-        float alpha = 255.f - (fadeTimer / fadeInTime) * 255.f;
-        if (alpha < 0.f) alpha = 0.f;
-        fadeOverlay.setFillColor(sf::Color(0, 0, 0, (uint8_t)alpha));
-
-        // Force update kamera ke posisi player sekarang (dengan clamping goa)
-        float camX = player.getPosition().x;
-        float halfWinW = (float)INTERNAL_W / 2.f;
-        if (inCave) {
-            float minCamX = 716.f + halfWinW;
-            float maxCamX = 1132.f - halfWinW;
-            if (camX < minCamX) camX = minCamX;
-            if (camX > maxCamX) camX = maxCamX;
-        } else {
-            if (camX < halfWinW) camX = halfWinW;
-        }
-        camera.setCenter({camX, (float)INTERNAL_H / 2.f});
-        renderTexture.setView(camera);
-
-        if (fadeTimer >= fadeInTime) {
-            fadeState = FadeState::NONE;
-            fadeTimer = 0.f;
-            fadeOverlay.setFillColor(sf::Color(0, 0, 0, 0));
-        }
-    }
-
-    // --- CAVE TRIGGER ---
-    if (!bossSpawned && fadeState == FadeState::NONE
-        && player.getPosition().x >= caveTriggerX) {
-        fadeState = FadeState::FADE_OUT;
-        fadeTimer = 0.f;
-    }
-
+    // ==========================================
+    // 1. KUMPULKAN PIJAKAN & TEMBOK GAIB DI AWAL
+    // ==========================================
     std::vector<sf::FloatRect> colliders;
     for (auto& p : platforms)
         colliders.push_back(p.getBounds());
+    
+    if (!enemies.empty()) {
+        colliders.push_back(sf::FloatRect({720.f, 0.f}, {20.f, (float)INTERNAL_H}));
+    }
 
-    player.update(dt, colliders);
-
-    // --- CEK SPAWNER MUSUH ---
-    for (auto& spawner : spawners) {
-        if (!spawner.triggered && player.getPosition().x >= spawner.triggerX) {
-            spawner.triggered = true;
-            std::cout << "[INFO] Spawn " << spawner.count << " Musuh!\n";
-            for (int i = 0; i < spawner.count; i++) {
-                enemies.emplace_back(spawner.spawnX + (i * 80.f), spawner.spawnY);
-            }
+    // ==========================================
+    // 2. CEGAT KEMATIAN PLAYER (Triger secepatnya)
+    // ==========================================
+    // Jangan tunggu isDeathDone, begitu darah habis langsung panggil Yuta!
+    if (player.getHealth() <= 0 && gameState == GameState::PLAYING) {
+        gameState = GameState::CUTSCENE;
+        cutscenePhase = 1;
+        cutsceneTimer = 0.f;
+        
+        if (boss) {
+            // --- PERBAIKAN POSISI YUTA ---
+            // Ambil titik tengah kamera, ditambah setengah lebar layar (batas kanan layar)
+            // Ditambah 50 pixel lagi agar Yuta benar-benar 100% muncul dari luar layar kamera!
+            yutaX = camera.getCenter().x + ((float)INTERNAL_W / 2.f) + 50.f;
+            yutaY = (float)INTERNAL_H - 44.f; 
+            boss->forcePacify(); 
         }
     }
 
-    // --- UPDATE MUSUH & CEK COLLISION ---
-    for (auto& enemy : enemies) {
-        enemy.update(dt, player.getPosition());
+    // ==========================================
+    // 3. LOGIKA CUTSCENE
+    // ==========================================
+    if (gameState == GameState::CUTSCENE) {
+        yutaAnimTimer += dt;
+        float yutaScale = 0.7f; 
 
-        // 1. Cek apakah peluru musuh mengenai player
-        for (auto& proj : enemy.getProjectiles()) {
-            if (proj.isAlive() && proj.getBounds().findIntersection(player.getSprite().getGlobalBounds())) {
-                proj.kill();
-                player.takeDamage(-1.f); 
+        // -- KUNCI PERBAIKAN --
+        // 1. Tetap jalankan update player agar animasi matinya selesai
+        player.update(dt, colliders); 
+        
+        // 2. Tetap jalankan update Rika, tapi kordinatnya kita arahkan ke Yuta.
+        // AI Rika akan otomatis diam (IDLE) dan menoleh ke kanan tanpa menyerang!
+        if (boss && cutscenePhase < 3) {
+            boss->update(dt, {yutaX, yutaY}, colliders); 
+        }
+        // ---------------------
+
+        if (cutscenePhase == 1) {
+            yutaX -= 40.f * dt; 
+            if (yutaAnimTimer >= 0.1f) {
+                yutaAnimTimer = 0.f;
+                yutaFrame = (yutaFrame + 1) % 10; 
+                int w = yutaWalkTex.getSize().x / 10;
+                int h = yutaWalkTex.getSize().y;
+                yutaSprite->setTexture(yutaWalkTex);
+                yutaSprite->setTextureRect(sf::IntRect({yutaFrame * w, 0}, {w, h}));
+                yutaSprite->setOrigin({w / 2.f, (float)h}); 
+                yutaSprite->setScale({-yutaScale, yutaScale}); 
+            }
+            
+            if (boss && yutaX <= boss->getBounds().position.x + 60.f) {
+                cutscenePhase = 2;
+                yutaFrame = 0;
             }
         }
+        else if (cutscenePhase == 2) {
+            cutsceneTimer += dt;
+            if (yutaAnimTimer >= 0.15f) {
+                yutaAnimTimer = 0.f;
+                yutaFrame = (yutaFrame + 1) % 11; 
+                int w = yutaIdleTex.getSize().x / 11;
+                int h = yutaIdleTex.getSize().y;
+                yutaSprite->setTexture(yutaIdleTex);
+                yutaSprite->setTextureRect(sf::IntRect({yutaFrame * w, 0}, {w, h}));
+                yutaSprite->setOrigin({w / 2.f, (float)h});
+                yutaSprite->setScale({-yutaScale, yutaScale}); 
+            }
+            
+            cutsceneText->setString("Rika, hentikan! Ayo kita pulang...");
+            cutsceneText->setPosition({yutaX - 100.f, yutaY - 70.f}); 
+            
+            if (cutsceneTimer > 6.0f) {
+                cutscenePhase = 3;
+                cutsceneTimer = 0.f;
+            }
+        }
+        else if (cutscenePhase == 3) {
+            cutsceneTimer += dt;
+            yutaX += 40.f * dt;
+            
+            if (boss) boss->forceWalkRight(dt);
+            
+            if (yutaAnimTimer >= 0.1f) {
+                yutaAnimTimer = 0.f;
+                yutaFrame = (yutaFrame + 1) % 10; 
+                int w = yutaWalkTex.getSize().x / 10;
+                int h = yutaWalkTex.getSize().y;
+                yutaSprite->setTexture(yutaWalkTex);
+                yutaSprite->setTextureRect(sf::IntRect({yutaFrame * w, 0}, {w, h}));
+                yutaSprite->setOrigin({w / 2.f, (float)h});
+                yutaSprite->setScale({yutaScale, yutaScale}); 
+            }
+            
+            float alpha = (cutsceneTimer / 3.0f) * 255.f; 
+            if (alpha > 255.f) alpha = 255.f;
+            fadeOverlay.setFillColor(sf::Color(0, 0, 0, (uint8_t)alpha));
+            fadeState = FadeState::FADE_OUT; 
+            
+            if (cutsceneTimer > 3.0f) {
+                cutscenePhase = 4;
+            }
+        }
+        else if (cutscenePhase == 4) {
+            cutsceneText->setString("Yuta berhasil menenangkan Rika...\nKamu terselamatkan.\n\n--- TRUE ENDING ---");
+            cutsceneText->setPosition({(float)INTERNAL_W / 2.f - 80.f, (float)INTERNAL_H / 2.f - 20.f});
+        }
+        
+        yutaSprite->setPosition({yutaX, yutaY});
+    }
+    // ==========================================
+    // 4. LOGIKA NORMAL GAME (Hanya jalan jika belum mati)
+    // ==========================================
+    else {
+        if (fadeState == FadeState::FADE_OUT) {
+            fadeTimer += dt;
+            float alpha = (fadeTimer / fadeOutTime) * 255.f;
+            if (alpha > 255.f) alpha = 255.f;
+            fadeOverlay.setFillColor(sf::Color(0, 0, 0, (uint8_t)alpha));
 
-        // 2. Cek apakah laser Kamehameha player mengenai musuh
-        if (!enemy.isDead) {
-            for (auto& l : player.getLasers()) {
-                if (l.isAlive() && l.getBounds().findIntersection(enemy.getBounds())) {
-                    enemy.takeDamage();
+            if (fadeTimer >= fadeOutTime) {
+                fadeState = FadeState::BLACK;
+                fadeTimer = 0.f;
+            }
+        }
+        else if (fadeState == FadeState::BLACK) {
+            fadeTimer += dt;
+            fadeOverlay.setFillColor(sf::Color(0, 0, 0, 255));
+
+            if (fadeTimer >= blackTime) {
+                fadeState = FadeState::FADE_IN;
+                fadeTimer = 0.f;
+
+                bossSpawned = true;
+                inCave      = true;
+                player.setPosition(750.f, (float)INTERNAL_H - 44.f);
+                boss = new Boss(1050.f, (float)INTERNAL_H - 80.f);
+
+                float newCamX = 750.f;
+                if (newCamX < (float)INTERNAL_W / 2.f)
+                    newCamX = (float)INTERNAL_W / 2.f;
+                camera.setCenter({newCamX, (float)INTERNAL_H / 2.f});
+                renderTexture.setView(camera);
+
+                for (float y = 0.f; y < (float)INTERNAL_H; y += 16.f) {
+                    platforms.emplace_back(716.f, y, 16.f, PlatformType::BOTTOM);
+                    platforms.emplace_back(1132.f, y, 16.f, PlatformType::BOTTOM);
                 }
             }
         }
-    }
+        else {
+            // Berlaku saat Fade In maupun saat tidak ada fade sama sekali
+            if (fadeState == FadeState::FADE_IN) {
+                fadeTimer += dt;
+                float alpha = 255.f - (fadeTimer / fadeInTime) * 255.f;
+                if (alpha < 0.f) alpha = 0.f;
+                fadeOverlay.setFillColor(sf::Color(0, 0, 0, (uint8_t)alpha));
 
-    // Hapus musuh yang animasinya matinya sudah selesai
-    enemies.erase(
-        std::remove_if(enemies.begin(), enemies.end(),
-            [](Enemy& e){ return e.isDeathDone; }),
-        enemies.end());
-
-    // Cek death animation selesai
-    if (player.isDeathDone()) {
-        gameState = GameState::GAME_OVER;
-        return;
-    }
-
-    // Jatuh ke lubang
-    if (player.getPosition().y > INTERNAL_H + 50.f) {
-        std::cout << "[INFO] Player jatuh ke lubang! Reset...\n";
-        player.setPosition(40.f, (float)INTERNAL_H - 44.f);
-    }
-
-    if (boss) {
-        for (auto& l : player.getLasers()) {
-            if (l.isAlive() && boss->getBounds().findIntersection(l.getBounds())) {
-                sf::Vector2f bossPos = boss->getBounds().position;
-                sf::Vector2f playerPos = player.getPosition();
-                float dirX = (bossPos.x > playerPos.x) ? 1.f : -1.f;
-                boss->applyKnockback(dirX);
+                if (fadeTimer >= fadeInTime) {
+                    fadeState = FadeState::NONE;
+                    fadeTimer = 0.f;
+                    fadeOverlay.setFillColor(sf::Color(0, 0, 0, 0));
+                }
             }
-        }
-    }
 
-    // Update boss
-    if (boss) {
-        boss->update(dt, player.getPosition(), colliders);
-
-        if (boss->shouldDamagePlayer()) {
-            sf::FloatRect bossBounds = boss->getBounds();
-            float bossCenterX = bossBounds.position.x + bossBounds.size.x / 2.f;
-            sf::Vector2f playerPos = player.getPosition();
-            float dx = playerPos.x - bossCenterX;
-            float dy = playerPos.y - (bossBounds.position.y + bossBounds.size.y / 2.f);
-            float dist = std::sqrt(dx*dx + dy*dy);
-
-            if (dist <= 48.f) {
-                float dirX = (dist > 0.f) ? (dx / dist) : 1.f;
-                player.takeDamage(dirX);
+            if (!bossSpawned && fadeState == FadeState::NONE && player.getPosition().x >= caveTriggerX) {
+                fadeState = FadeState::FADE_OUT;
+                fadeTimer = 0.f;
             }
-        }
+
+            // Normal update player & arena musuh
+            player.update(dt, colliders);
+
+            for (auto& spawner : spawners) {
+                if (!spawner.triggered && player.getPosition().x >= spawner.triggerX) {
+                    spawner.triggered = true;
+                    for (int i = 0; i < spawner.count; i++) {
+                        enemies.emplace_back(spawner.spawnX + (i * 80.f), spawner.spawnY);
+                    }
+                }
+            }
+
+            for (auto& enemy : enemies) {
+                enemy.update(dt, player.getPosition());
+                for (auto& proj : enemy.getProjectiles()) {
+                    if (proj.isAlive() && proj.getBounds().findIntersection(player.getSprite().getGlobalBounds())) {
+                        proj.kill();
+                        player.takeDamage(-1.f); 
+                    }
+                }
+                if (!enemy.isDead) {
+                    for (auto& l : player.getLasers()) {
+                        if (l.isAlive() && l.getBounds().findIntersection(enemy.getBounds())) {
+                            enemy.takeDamage();
+                        }
+                    }
+                }
+            }
+
+            enemies.erase(
+                std::remove_if(enemies.begin(), enemies.end(),
+                    [](Enemy& e){ return e.isDeathDone; }),
+                enemies.end());
+
+            if (player.getPosition().y > INTERNAL_H + 50.f) {
+                player.setPosition(40.f, (float)INTERNAL_H - 44.f);
+            }
+
+            if (boss) {
+                for (auto& l : player.getLasers()) {
+                    if (l.isAlive() && boss->getBounds().findIntersection(l.getBounds())) {
+                        sf::Vector2f bossPos = boss->getBounds().position;
+                        sf::Vector2f playerPos = player.getPosition();
+                        float dirX = (bossPos.x > playerPos.x) ? 1.f : -1.f;
+                        boss->applyKnockback(dirX);
+                    }
+                }
+
+                boss->update(dt, player.getPosition(), colliders);
+
+                if (boss->shouldDamagePlayer()) {
+                    sf::FloatRect bossBounds = boss->getBounds();
+                    float bossCenterX = bossBounds.position.x + bossBounds.size.x / 2.f;
+                    sf::Vector2f playerPos = player.getPosition();
+                    float dx = playerPos.x - bossCenterX;
+                    float dy = playerPos.y - (bossBounds.position.y + bossBounds.size.y / 2.f);
+                    float dist = std::sqrt(dx*dx + dy*dy);
+
+                    if (dist <= 48.f) {
+                        float dirX = (dist > 0.f) ? (dx / dist) : 1.f;
+                        player.takeDamage(dirX);
+                    }
+                }
+            }
+        } // Akhir dari else blok Normal Game Update (tidak ada fade yang menutup jalan)
     }
 
-    // --- FIX KAMERA CLAMPING (BATAS GOA & BATAS LUAR) ---
+    // ==========================================
+    // 5. KAMERA SELALU UPDATE (Di luar kondisi apapun)
+    // ==========================================
     float camX = player.getPosition().x;
     float halfWinW = (float)INTERNAL_W / 2.f;
 
     if (inCave) {
-        // Tembok kiri goa di 716.f, tembok kanan di 1132.f
         float minCamX = 716.f + halfWinW;
         float maxCamX = 1132.f - halfWinW;
-
         if (camX < minCamX) camX = minCamX;
         if (camX > maxCamX) camX = maxCamX;
     } 
     else {
-        // Batas dunia luar
         if (camX < halfWinW) camX = halfWinW;
     }
 
@@ -361,9 +443,7 @@ void Game::render() {
 
     float halfWinW = (float)INTERNAL_W / 2.f;
 
-    // Background — ganti saat di goa
     if (inCave && caveBgSprite) {
-        // PERBAIKAN: Parallax background goa menggunakan posisi kamera yang sudah diclamp
         float camOffsetX = camera.getCenter().x - halfWinW - 750.f;
         float parallaxX  = -(camOffsetX * 0.2f);
         
@@ -388,12 +468,10 @@ void Game::render() {
         renderTexture.setView(camera);
     }
 
-    // Game objects
     for (auto& p : platforms)
         p.draw(renderTexture);
 
     renderTexture.draw(player.getSprite());
-
     for (auto& l : player.getLasers())
         l.draw(renderTexture);
 
@@ -401,9 +479,21 @@ void Game::render() {
         enemy.draw(renderTexture);
 
     if (boss) boss->draw(renderTexture);
+
+    // ==========================================
+    // GAMBAR YUTA SEBAGAI POINTER DEREFERENCE (*)
+    // ==========================================
+    if (gameState == GameState::CUTSCENE) {
+        if (cutscenePhase < 4 && yutaSprite) {
+            renderTexture.draw(*yutaSprite); // Ditambah tanda bintang (*)
+            if (cutscenePhase == 2 && cutsceneText) {
+                renderTexture.draw(*cutsceneText); 
+            }
+        }
+    }
+
     renderUI();
 
-    // Game over overlay
     if (gameState == GameState::GAME_OVER) {
         renderTexture.setView(uiView);
         renderTexture.draw(gameOverBg);
@@ -412,15 +502,18 @@ void Game::render() {
         renderTexture.setView(camera);
     }
 
-    // Fade overlay — SELALU paling atas
-    if (fadeState != FadeState::NONE) {
+    if (fadeState != FadeState::NONE || cutscenePhase >= 3) {
         renderTexture.setView(uiView);
         renderTexture.draw(fadeOverlay);
+        
+        if (cutscenePhase == 4 && cutsceneText) {
+            renderTexture.draw(*cutsceneText); 
+        }
+        
         renderTexture.setView(camera);
     }
 
     renderTexture.display();
-
     renderSprite->setTexture(renderTexture.getTexture());
     window.clear();
     window.draw(*renderSprite);

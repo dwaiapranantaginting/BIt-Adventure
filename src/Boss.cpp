@@ -30,6 +30,11 @@ void Boss::update(float dt, sf::Vector2f playerPos,
 }
 
 void Boss::chasePlayer(float dt, sf::Vector2f playerPos) {
+    if (isPacified) return;
+
+    sf::Vector2f bossPos = sprite.getPosition();
+    float dx = playerPos.x - bossPos.x;
+    
     if (isKnockedBack) {
         knockbackTimer -= dt;
         velocity = knockbackVelocity;
@@ -43,8 +48,7 @@ void Boss::chasePlayer(float dt, sf::Vector2f playerPos) {
         return;
     }
 
-    sf::Vector2f bossPos = sprite.getPosition();
-    float dx = playerPos.x - bossPos.x;
+    // Removed the duplicate declarations of bossPos and dx from here.
     float dy = playerPos.y - bossPos.y;
     float dist = std::sqrt(dx * dx + dy * dy);
 
@@ -77,7 +81,8 @@ void Boss::chasePlayer(float dt, sf::Vector2f playerPos) {
         animTimer      = 0.f;
         hasDealtDamage = false;
     } 
-    else if (dist > 4.f) {
+    // Applied the correct chaseRange logic we fixed earlier!
+    else if (dist <= chaseRange) {
         velocity.x = (dx / dist) * moveSpeed;
         velocity.y = (dy / dist) * moveSpeed;
         state      = BossState::RUN;
@@ -232,3 +237,22 @@ void Boss::draw(sf::RenderTarget& target) {
     target.draw(sprite);
 }
 
+void Boss::forcePacify() {
+    isPacified = true;
+    
+    state = BossState::IDLE;
+    isAttacking = false;
+    velocity = {0.f, 0.f};
+    facingRight = true; 
+    flipSprite();
+}
+
+void Boss::forceWalkRight(float dt) {
+    state = BossState::RUN; // Ganti jadi FLY kalau Rika kamu terbang
+    velocity.x = 50.f;      // Kecepatan jalan santai bareng Yuta
+    velocity.y = 0.f;
+    facingRight = true;
+    flipSprite();
+    sprite.move(velocity * dt);
+    updateAnimation(dt);    // Putar animasi bergeraknya
+}
