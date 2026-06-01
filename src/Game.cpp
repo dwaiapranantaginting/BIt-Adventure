@@ -169,35 +169,51 @@ void Game::handleInput() {
 }
 
 void Game::update(float dt) {
-    if (gameState == GameState::GAME_OVER) return;
+    if (gameState == GameState::GAME_OVER) {
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::R)) {
+            requestRestart = true; // Kasih tau main.cpp buat restart
+            window.close();        // Tutup window saat ini
+        }
+        if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Q)) {
+            window.close();        // Keluar total
+        }
+        return; 
+    }
 
     // ==========================================
     // 1. KUMPULKAN PIJAKAN & TEMBOK GAIB DI AWAL
     // ==========================================
     std::vector<sf::FloatRect> colliders;
-    for (auto& p : platforms)
-        colliders.push_back(p.getBounds());
+    for (auto& p : platforms) colliders.push_back(p.getBounds());
     
     if (!enemies.empty()) {
         colliders.push_back(sf::FloatRect({720.f, 0.f}, {20.f, (float)INTERNAL_H}));
     }
 
     // ==========================================
-    // 2. CEGAT KEMATIAN PLAYER (Triger secepatnya)
+    // 2. CEGAT KEMATIAN PLAYER (Pisahkan Boss vs Biasa)
     // ==========================================
-    // Jangan tunggu isDeathDone, begitu darah habis langsung panggil Yuta!
     if (player.getHealth() <= 0 && gameState == GameState::PLAYING) {
-        gameState = GameState::CUTSCENE;
-        cutscenePhase = 1;
-        cutsceneTimer = 0.f;
-        
-        if (boss) {
+        if (boss != nullptr) {
+            // JIKA MATI LAWAN RIKA -> MUNCUL YUTA
+            gameState = GameState::CUTSCENE;
+            cutscenePhase = 1;
+            cutsceneTimer = 0.f;
+            
             // --- PERBAIKAN POSISI YUTA ---
-            // Ambil titik tengah kamera, ditambah setengah lebar layar (batas kanan layar)
-            // Ditambah 50 pixel lagi agar Yuta benar-benar 100% muncul dari luar layar kamera!
             yutaX = camera.getCenter().x + ((float)INTERNAL_W / 2.f) + 50.f;
             yutaY = (float)INTERNAL_H - 44.f; 
             boss->forcePacify(); 
+        } 
+        else {
+            // JIKA MATI OLEH MUSUH BIASA -> GAME OVER
+            gameState = GameState::GAME_OVER;
+            
+            // Ubah teks game over biar ada petunjuk tombolnya
+            if (gameOverText) {
+                gameOverText->setString("GAME OVER\n\n[R] Restart\n[Q] Quit");
+                gameOverText->setPosition({(float)INTERNAL_W / 2.f - 50.f, (float)INTERNAL_H / 2.f - 30.f});
+            }
         }
     }
 
@@ -213,11 +229,9 @@ void Game::update(float dt) {
         player.update(dt, colliders); 
         
         // 2. Tetap jalankan update Rika, tapi kordinatnya kita arahkan ke Yuta.
-        // AI Rika akan otomatis diam (IDLE) dan menoleh ke kanan tanpa menyerang!
         if (boss && cutscenePhase < 3) {
             boss->update(dt, {yutaX, yutaY}, colliders); 
         }
-        // ---------------------
 
         if (cutscenePhase == 1) {
             yutaX -= 40.f * dt; 
@@ -415,7 +429,7 @@ void Game::update(float dt) {
                     }
                 }
             }
-        } // Akhir dari else blok Normal Game Update (tidak ada fade yang menutup jalan)
+        } 
     }
 
     // ==========================================

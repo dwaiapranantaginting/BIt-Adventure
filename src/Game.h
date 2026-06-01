@@ -10,6 +10,7 @@ class Game {
 public:
     Game();
     void run();
+    bool requestRestart = false;
 
 private:
     void handleInput();
@@ -83,7 +84,7 @@ private:
 
     sf::Sprite* yutaSprite = nullptr;
     sf::Text* cutsceneText = nullptr;
-    
+
     float       yutaX = 0.f;
     float       yutaY = 0.f;
     float       yutaAnimTimer = 0.f;

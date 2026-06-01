@@ -1,12 +1,17 @@
 #include "Game.h"
-#include <ctime>   // Tambahkan ini
-#include <cstdlib> // Tambahkan ini
+#include <ctime>
+#include <cstdlib>
 
 int main() {
-    // Beri "bibit" acak berdasarkan jam komputermu sekarang
-    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+    bool playAgain = true;
 
-    Game game;
-    game.run();
+    while (playAgain) {
+        Game game;      // Buat dunia game dari nol (HP, musuh, map otomatis kereset 100%)
+        game.run();     // Mainkan gamenya
+        
+        // Setelah game.run() selesai (karena mati/quit), cek apakah user nekan 'R'
+        playAgain = game.requestRestart; 
+    }
+
     return 0;
 }
