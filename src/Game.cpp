@@ -162,6 +162,9 @@ void Game::run() {
 }
 
 void Game::handleInput() {
+    // Blokir kontrol player jika tidak sedang dalam mode PLAYING biasa
+    if (gameState != GameState::PLAYING) return; 
+
     player.handleInput();
 
     sf::Vector2i mousePos = sf::Mouse::getPosition(window);
@@ -171,18 +174,15 @@ void Game::handleInput() {
 void Game::update(float dt) {
     if (gameState == GameState::GAME_OVER) {
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::R)) {
-            requestRestart = true; // Kasih tau main.cpp buat restart
-            window.close();        // Tutup window saat ini
+            requestRestart = true; 
+            window.close();        
         }
         if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Q)) {
-            window.close();        // Keluar total
+            window.close();        
         }
         return; 
     }
 
-    // ==========================================
-    // 1. KUMPULKAN PIJAKAN & TEMBOK GAIB DI AWAL
-    // ==========================================
     std::vector<sf::FloatRect> colliders;
     for (auto& p : platforms) colliders.push_back(p.getBounds());
     
@@ -190,26 +190,18 @@ void Game::update(float dt) {
         colliders.push_back(sf::FloatRect({720.f, 0.f}, {20.f, (float)INTERNAL_H}));
     }
 
-    // ==========================================
-    // 2. CEGAT KEMATIAN PLAYER (Pisahkan Boss vs Biasa)
-    // ==========================================
     if (player.getHealth() <= 0 && gameState == GameState::PLAYING) {
         if (boss != nullptr) {
-            // JIKA MATI LAWAN RIKA -> MUNCUL YUTA
             gameState = GameState::CUTSCENE;
             cutscenePhase = 1;
             cutsceneTimer = 0.f;
             
-            // --- PERBAIKAN POSISI YUTA ---
             yutaX = camera.getCenter().x + ((float)INTERNAL_W / 2.f) + 50.f;
             yutaY = (float)INTERNAL_H - 44.f; 
             boss->forcePacify(); 
         } 
         else {
-            // JIKA MATI OLEH MUSUH BIASA -> GAME OVER
             gameState = GameState::GAME_OVER;
-            
-            // Ubah teks game over biar ada petunjuk tombolnya
             if (gameOverText) {
                 gameOverText->setString("GAME OVER\n\n[R] Restart\n[Q] Quit");
                 gameOverText->setPosition({(float)INTERNAL_W / 2.f - 50.f, (float)INTERNAL_H / 2.f - 30.f});
@@ -217,18 +209,12 @@ void Game::update(float dt) {
         }
     }
 
-    // ==========================================
-    // 3. LOGIKA CUTSCENE
-    // ==========================================
     if (gameState == GameState::CUTSCENE) {
         yutaAnimTimer += dt;
         float yutaScale = 0.7f; 
 
-        // -- KUNCI PERBAIKAN --
-        // 1. Tetap jalankan update player agar animasi matinya selesai
         player.update(dt, colliders); 
         
-        // 2. Tetap jalankan update Rika, tapi kordinatnya kita arahkan ke Yuta.
         if (boss && cutscenePhase < 3) {
             boss->update(dt, {yutaX, yutaY}, colliders); 
         }
@@ -264,7 +250,7 @@ void Game::update(float dt) {
                 yutaSprite->setScale({-yutaScale, yutaScale}); 
             }
             
-            cutsceneText->setString("Rika, hentikan! Ayo kita pulang...");
+            cutsceneText->setString("Rina, hentikan! Ayo kita pulang...");
             cutsceneText->setPosition({yutaX - 100.f, yutaY - 70.f}); 
             
             if (cutsceneTimer > 6.0f) {
@@ -299,16 +285,32 @@ void Game::update(float dt) {
             }
         }
         else if (cutscenePhase == 4) {
-            cutsceneText->setString("Yuta berhasil menenangkan Rika...\nKamu terselamatkan.\n\n--- TRUE ENDING ---");
+            cutsceneText->setString("Yusuf berhasil menenangkan Rina...\nKamu terselamatkan.\n\n--- TRUE ENDING ---");
             cutsceneText->setPosition({(float)INTERNAL_W / 2.f - 80.f, (float)INTERNAL_H / 2.f - 20.f});
         }
         
         yutaSprite->setPosition({yutaX, yutaY});
     }
     // ==========================================
-    // 4. LOGIKA NORMAL GAME (Hanya jalan jika belum mati)
+    // 4. LOGIKA BOSS INTRO (KAGET AWAL KETEMU)
     // ==========================================
-    else {
+    else if (gameState == GameState::BOSS_INTRO) {
+        bossIntroTimer += dt;
+        
+        // Animasi napas tetap jalan, tapi kontrol sudah kita blokir di handleInput
+        player.update(dt, colliders); 
+        if (boss) boss->update(dt, player.getPosition(), colliders); 
+
+        // Kaget selama 2.5 detik
+        if (bossIntroTimer > 2.5f) {
+            gameState = GameState::PLAYING;
+            if (boss) boss->isPacified = false; // LEPAS SEGEL RIKA! BATTLE DIMULAI!
+        }
+    }
+    // ==========================================
+    // 5. LOGIKA NORMAL GAME
+    // ==========================================
+    else if (gameState == GameState::PLAYING) {
         if (fadeState == FadeState::FADE_OUT) {
             fadeTimer += dt;
             float alpha = (fadeTimer / fadeOutTime) * 255.f;
@@ -346,7 +348,6 @@ void Game::update(float dt) {
             }
         }
         else {
-            // Berlaku saat Fade In maupun saat tidak ada fade sama sekali
             if (fadeState == FadeState::FADE_IN) {
                 fadeTimer += dt;
                 float alpha = 255.f - (fadeTimer / fadeInTime) * 255.f;
@@ -357,6 +358,14 @@ void Game::update(float dt) {
                     fadeState = FadeState::NONE;
                     fadeTimer = 0.f;
                     fadeOverlay.setFillColor(sf::Color(0, 0, 0, 0));
+
+                    // --- PELATUK MODE KAGET ---
+                    if (inCave && boss) {
+                        gameState = GameState::BOSS_INTRO;
+                        bossIntroTimer = 0.f;
+                        boss->forcePacify(); 
+                        return; // Skip update sisanya di frame ini
+                    }
                 }
             }
 
@@ -365,7 +374,6 @@ void Game::update(float dt) {
                 fadeTimer = 0.f;
             }
 
-            // Normal update player & arena musuh
             player.update(dt, colliders);
 
             for (auto& spawner : spawners) {
@@ -432,9 +440,6 @@ void Game::update(float dt) {
         } 
     }
 
-    // ==========================================
-    // 5. KAMERA SELALU UPDATE (Di luar kondisi apapun)
-    // ==========================================
     float camX = player.getPosition().x;
     float halfWinW = (float)INTERNAL_W / 2.f;
 
@@ -493,6 +498,13 @@ void Game::render() {
         enemy.draw(renderTexture);
 
     if (boss) boss->draw(renderTexture);
+
+    if (gameState == GameState::BOSS_INTRO && cutsceneText) {
+        cutsceneText->setString("Ampun..");
+        // Taruh teks tepat di atas kepala playermu layaknya komik!
+        cutsceneText->setPosition({player.getPosition().x - 40.f, player.getPosition().y - 60.f});
+        renderTexture.draw(*cutsceneText);
+    }
 
     // ==========================================
     // GAMBAR YUTA SEBAGAI POINTER DEREFERENCE (*)

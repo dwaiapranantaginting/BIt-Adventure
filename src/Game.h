@@ -51,7 +51,7 @@ private:
     std::vector<EnemySpawner> spawners;
 
     // Game State
-    enum class GameState { PLAYING, GAME_OVER, CUTSCENE };
+    enum class GameState { PLAYING, GAME_OVER, CUTSCENE, BOSS_INTRO };
     GameState gameState = GameState::PLAYING;
 
     // Game Over Screen
@@ -92,4 +92,5 @@ private:
     
     int         cutscenePhase = 0;
     float       cutsceneTimer = 0.f;
+    float bossIntroTimer = 0.f;
 };
