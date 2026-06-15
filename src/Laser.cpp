@@ -4,11 +4,24 @@
 Laser::Laser(float x, float y, bool goRight)
     : sprite(texture)
 {
-    // Simpan dulu ke member variable secara eksplisit
     this->goRight = goRight;
-    
+
+    // Load texture laser
     if (!texture.loadFromFile("assets/sprites/laser.png"))
+    {
         std::cerr << "[ERROR] Gagal load laser.png!\n";
+    }
+
+    // Load sound laser
+    if (!laserBuffer.loadFromFile("assets/sounds/sound_laser.mp3"))
+    {
+        std::cerr << "[ERROR] Gagal load sound_laser.mp3!\n";
+    }
+
+    laserSound.setBuffer(laserBuffer);
+
+    // Putar suara saat laser dibuat
+    laserSound.play();
 
     sprite.setTexture(texture);
     sprite.setTextureRect(sf::IntRect({0, 0}, {96, 32}));
@@ -16,44 +29,56 @@ Laser::Laser(float x, float y, bool goRight)
     velocity = {0.f, 0.f};
     lifetime = 1.0f;
 
-    if (this->goRight) {
+    if (this->goRight)
+    {
         sprite.setOrigin({0.f, 16.f});
         sprite.setScale({4.f, 1.5f});
-    } else {
-        // PERBAIKAN: Origin tetap di 0.f agar menempel di tangan player
-        sprite.setOrigin({0.f, 16.f}); 
-        // Skala negatif akan otomatis memanjangkan laser ke arah kiri
-        sprite.setScale({-4.f, 1.5f}); 
+    }
+    else
+    {
+        sprite.setOrigin({0.f, 16.f});
+        sprite.setScale({-4.f, 1.5f});
     }
 
     sprite.setPosition({x, y});
 }
 
-void Laser::update(float dt) {
+void Laser::update(float dt)
+{
     if (!alive) return;
 
     lifetime -= dt;
-    if (lifetime <= 0.f) {
+
+    if (lifetime <= 0.f)
+    {
         alive = false;
         return;
     }
 
-    // Animasi loop — laser berkedip/beranimasi di tempat
     animTimer += dt;
-    if (animTimer >= animSpeed) {
+
+    if (animTimer >= animSpeed)
+    {
         animTimer = 0.f;
         animFrame++;
-        if (animFrame >= 5) animFrame = 0;
+
+        if (animFrame >= 5)
+            animFrame = 0;
+
         sprite.setTextureRect(
-            sf::IntRect({animFrame * 96, 0}, {96, 32}));
+            sf::IntRect({animFrame * 96, 0}, {96, 32})
+        );
     }
 }
 
-void Laser::draw(sf::RenderTarget& target) {
+void Laser::draw(sf::RenderTarget& target)
+{
     if (!alive) return;
+
     target.draw(sprite);
 }
 
-sf::FloatRect Laser::getBounds() {
+sf::FloatRect Laser::getBounds()
+{
     return sprite.getGlobalBounds();
 }
