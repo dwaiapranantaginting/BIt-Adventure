@@ -1,5 +1,6 @@
 #pragma once
 #include <SFML/Graphics.hpp>
+#include <SFML/Audio.hpp>
 #include "Player.h"
 #include "Platform.h"
 #include "Boss.h"
@@ -75,22 +76,22 @@ private:
     float              blackTime   = 0.5f;
     float              fadeInTime  = 0.8f;
     sf::RectangleShape fadeOverlay;
-    bool               bossSpawned = false;
+    bool               bossSpawned  = false;
     float              caveTriggerX = 732.f;
+
+    // Background Music
+    sf::Music bgMusic;
 
     // --- CUTSCENE YUTA ---
     sf::Texture yutaWalkTex;
     sf::Texture yutaIdleTex;
-
-    sf::Sprite* yutaSprite = nullptr;
-    sf::Text* cutsceneText = nullptr;
-
-    float       yutaX = 0.f;
-    float       yutaY = 0.f;
+    sf::Sprite* yutaSprite   = nullptr;
+    sf::Text*   cutsceneText = nullptr;
+    float       yutaX        = 0.f;
+    float       yutaY        = 0.f;
     float       yutaAnimTimer = 0.f;
-    int         yutaFrame = 0;
-    
+    int         yutaFrame    = 0;
     int         cutscenePhase = 0;
     float       cutsceneTimer = 0.f;
-    float bossIntroTimer = 0.f;
+    float       bossIntroTimer = 0.f;
 };
