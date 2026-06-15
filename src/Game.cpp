@@ -28,7 +28,6 @@ Game::Game()
     if (bgTexture.loadFromFile("assets/ui/background.png")) {
         bgSprite = new sf::Sprite(bgTexture);
         
-        // Scale lebih besar dari layar (1.5x) biar ada ruang gerak parallax
         float scaleX = (float)INTERNAL_W * 1.5f / bgTexture.getSize().x;
         float scaleY = (float)INTERNAL_H / bgTexture.getSize().y;
         bgSprite->setScale({scaleX, scaleY});
@@ -40,7 +39,6 @@ Game::Game()
     for (float y = 0.f; y < groundTopY; y += 16.f)
         platforms.emplace_back(0.f, y, 16.f, PlatformType::BOTTOM);
 
-    // Game over screen
     gameOverBg.setSize({(float)INTERNAL_W, (float)INTERNAL_H});
     gameOverBg.setFillColor(sf::Color(0, 0, 0, 180));
     gameOverBg.setPosition({0.f, 0.f});
@@ -66,12 +64,10 @@ Game::Game()
 
     loadUI();
 
-    // Setup fade overlay
     fadeOverlay.setSize({(float)INTERNAL_W, (float)INTERNAL_H});
     fadeOverlay.setFillColor(sf::Color(0, 0, 0, 0));
     fadeOverlay.setPosition({0.f, 0.f});
 
-    // Load cave background
     if (caveBgTexture.loadFromFile("assets/ui/cave_bg.png")) {
         caveBgSprite = new sf::Sprite(caveBgTexture);
         float scaleX = (float)INTERNAL_W * 1.5f / caveBgTexture.getSize().x;
@@ -79,25 +75,28 @@ Game::Game()
         caveBgSprite->setScale({scaleX, scaleY});
     }
 
-    // Tambah atap goa — platform atas dari x=732 sepanjang 400px
-    // Baris atas (setinggi 0 dari atas)
     platforms.emplace_back(732.f, 0.f,   400.f, PlatformType::BOTTOM);
     platforms.emplace_back(732.f, 16.f,  400.f, PlatformType::BOTTOM);
 
-    // (Taruh di sembarang tempat di dalam konstruktor Game::Game, misalnya di bawah kode font)
-    
-// --- SETUP ALOKASI YUTA & TEXT (SFML 3 COMPATIBLE) ---
+    // --- SETUP ALOKASI YUTA & TEXT (SFML 3 COMPATIBLE) ---
     yutaWalkTex.loadFromFile("assets/sprites/yuta_walk.png");
     yutaIdleTex.loadFromFile("assets/sprites/yuta_idle.png");
     
-    // Buat objek sprite dan text secara dinamis menggunakan pointer
     yutaSprite = new sf::Sprite(yutaWalkTex);
     cutsceneText = new sf::Text(gameOverFont); 
     
-    // Karena sekarang pointer, gunakan tanda panah (->) bukan titik (.)
     cutsceneText->setCharacterSize(14);
     cutsceneText->setFillColor(sf::Color::White);
-}
+
+    // --- LOAD & PLAY BACKGROUND MUSIC ---
+    if (!bgMusic.openFromFile("assets/sounds/sound_background.wav")) {
+        std::cerr << "[ERROR] Gagal load background music!\n";
+    } else {
+        bgMusic.setLoop(true);
+        bgMusic.setVolume(40);
+        bgMusic.play();
+    }
+} // <-- tutup constructor Game::Game()
 
 void Game::createGroundSegment(float x, float width) {
     platforms.emplace_back(x, (float)INTERNAL_H - 48.f, width, PlatformType::TOP);
@@ -162,7 +161,6 @@ void Game::run() {
 }
 
 void Game::handleInput() {
-    // Blokir kontrol player jika tidak sedang dalam mode PLAYING biasa
     if (gameState != GameState::PLAYING) return; 
 
     player.handleInput();
@@ -201,6 +199,7 @@ void Game::update(float dt) {
             boss->forcePacify(); 
         } 
         else {
+            bgMusic.stop(); // stop music saat game over
             gameState = GameState::GAME_OVER;
             if (gameOverText) {
                 gameOverText->setString("GAME OVER\n\n[R] Restart\n[Q] Quit");
@@ -291,25 +290,17 @@ void Game::update(float dt) {
         
         yutaSprite->setPosition({yutaX, yutaY});
     }
-    // ==========================================
-    // 4. LOGIKA BOSS INTRO (KAGET AWAL KETEMU)
-    // ==========================================
     else if (gameState == GameState::BOSS_INTRO) {
         bossIntroTimer += dt;
         
-        // Animasi napas tetap jalan, tapi kontrol sudah kita blokir di handleInput
         player.update(dt, colliders); 
         if (boss) boss->update(dt, player.getPosition(), colliders); 
 
-        // Kaget selama 2.5 detik
         if (bossIntroTimer > 2.5f) {
             gameState = GameState::PLAYING;
-            if (boss) boss->isPacified = false; // LEPAS SEGEL RIKA! BATTLE DIMULAI!
+            if (boss) boss->isPacified = false;
         }
     }
-    // ==========================================
-    // 5. LOGIKA NORMAL GAME
-    // ==========================================
     else if (gameState == GameState::PLAYING) {
         if (fadeState == FadeState::FADE_OUT) {
             fadeTimer += dt;
@@ -359,12 +350,11 @@ void Game::update(float dt) {
                     fadeTimer = 0.f;
                     fadeOverlay.setFillColor(sf::Color(0, 0, 0, 0));
 
-                    // --- PELATUK MODE KAGET ---
                     if (inCave && boss) {
                         gameState = GameState::BOSS_INTRO;
                         bossIntroTimer = 0.f;
                         boss->forcePacify(); 
-                        return; // Skip update sisanya di frame ini
+                        return;
                     }
                 }
             }
@@ -501,17 +491,13 @@ void Game::render() {
 
     if (gameState == GameState::BOSS_INTRO && cutsceneText) {
         cutsceneText->setString("Ampun..");
-        // Taruh teks tepat di atas kepala playermu layaknya komik!
         cutsceneText->setPosition({player.getPosition().x - 40.f, player.getPosition().y - 60.f});
         renderTexture.draw(*cutsceneText);
     }
 
-    // ==========================================
-    // GAMBAR YUTA SEBAGAI POINTER DEREFERENCE (*)
-    // ==========================================
     if (gameState == GameState::CUTSCENE) {
         if (cutscenePhase < 4 && yutaSprite) {
-            renderTexture.draw(*yutaSprite); // Ditambah tanda bintang (*)
+            renderTexture.draw(*yutaSprite);
             if (cutscenePhase == 2 && cutsceneText) {
                 renderTexture.draw(*cutsceneText); 
             }
