@@ -24,7 +24,17 @@ Player::Player()
     bool loadedDeath = deathTexture.loadFromFile("assets/sprites/deathanimasi.png");
     if (!loadedDeath) std::cerr << "[ERROR] Gagal load death sprite!\n";
 
-    bool loadedShoot = shootTexture.loadFromFile("assets/sprites/shooting.png");
+    // Load sound assets
+    if (!deathBuffer.loadFromFile("assets/sounds/DeathSound.mp3")) {
+        std::cerr << "[ERROR] Gagal load death sound!\n";
+    } else {
+        deathSound.setBuffer(deathBuffer);
+    }
+    if (!jumpBuffer.loadFromFile("assets/sounds/JumpSound.mp3")) {
+        std::cerr << "[ERROR] Gagal load jump sound!\n";
+    } else {
+        jumpSound.setBuffer(jumpBuffer);
+    }
     if (!loadedShoot) std::cerr << "[ERROR] Gagal load shoot sprite!\n";
 
     sprite = sf::Sprite(texture);
@@ -173,6 +183,7 @@ void Player::handleMovement(float dt) {
 
 void Player::handleJump() {
     velocity.y   = jumpForce;
+    jumpSound.play();
     isOnGround   = false;
     isLanding    = false;
     state        = PlayerState::JUMP;
@@ -420,6 +431,7 @@ void Player::takeDamage(float knockbackDirX) {
         float knockbackSpeed = 120.f;
         velocity.x = knockbackDirX * knockbackSpeed;
         velocity.y = -80.f;
+        deathSound.play();
         state           = PlayerState::HURT;
         return;
     }
