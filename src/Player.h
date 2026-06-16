@@ -1,5 +1,6 @@
 #pragma once
 #include <SFML/Graphics.hpp>
+#include <SFML/Audio.hpp>
 #include <vector>
 #include "Laser.h"
 
@@ -89,4 +90,10 @@ private:
     bool  laserSpawned  = false;
     bool  canShoot      = true;
     float shootCooldown = 0.f;
+
+    // Sound assets
+    sf::SoundBuffer deathBuffer;
+    sf::Sound deathSound;
+    sf::SoundBuffer jumpBuffer;
+    sf::Sound jumpSound;
 };
